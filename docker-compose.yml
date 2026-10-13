@@ -1,0 +1,6 @@
+name: agentflow
+
+# Service containers are added when each backend is implemented.
+# Reserved names: api-gateway, auth-service, agent-service,
+# workflow-service, execution-service, notification-service.
+services: {}

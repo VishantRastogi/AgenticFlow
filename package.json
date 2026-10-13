@@ -1,0 +1,23 @@
+{
+  "name": "agentflow",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @agentflow/web",
+    "build:web": "npm run build -w @agentflow/web",
+    "start:web": "npm run start -w @agentflow/web",
+    "lint:web": "npm run lint -w @agentflow/web",
+    "typecheck:web": "npm run typecheck -w @agentflow/web",
+    "test:web": "npm run test -w @agentflow/web",
+    "dev:api": "npm run dev -w @agentflow/api-gateway",
+    "build:api": "npm run build -w @agentflow/api-gateway",
+    "start:api": "npm run start -w @agentflow/api-gateway",
+    "typecheck:api": "npm run typecheck -w @agentflow/api-gateway"
+  },
+  "license": "ISC"
+}

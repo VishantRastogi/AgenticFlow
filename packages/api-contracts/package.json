@@ -1,0 +1,6 @@
+{
+  "name": "@agentflow/api-contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "API contracts for AgentFlow."
+}

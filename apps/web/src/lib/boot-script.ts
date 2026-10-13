@@ -1,0 +1,3 @@
+export const sidebarBootScript = `(function(){try{var raw=localStorage.getItem("agentflow-ui");if(raw){var data=JSON.parse(raw);if(data&&data.state&&data.state.sidebarCollapsed){document.documentElement.dataset.sidebar="collapsed"}}}catch(e){}try{if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){document.documentElement.dataset.motion="reduced"}}catch(e){}})();`
+
+export const themeBootScript = `(function(){try{var theme=localStorage.getItem("agentflow-theme");var systemDark=window.matchMedia("(prefers-color-scheme: dark)").matches;var dark=theme==="dark"||((!theme||theme==="system")&&systemDark);document.documentElement.classList.toggle("dark",dark)}catch(e){}})();`

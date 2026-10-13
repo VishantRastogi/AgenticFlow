@@ -1,0 +1,6 @@
+{
+  "name": "@agentflow/notification-service",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Notification service for AgentFlow."
+}

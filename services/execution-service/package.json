@@ -1,0 +1,6 @@
+{
+  "name": "@agentflow/execution-service",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Execution service for AgentFlow."
+}
