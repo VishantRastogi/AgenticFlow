@@ -49,7 +49,7 @@ export function ResetPasswordForm() {
       {reset.data ? (
         <FormBanner tone="success">
           {reset.data.message}{" "}
-          <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+          <Link href="/login" className="font-medium text-primary underline underline-offset-4">
             Sign in
           </Link>
         </FormBanner>

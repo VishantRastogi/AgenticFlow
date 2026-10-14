@@ -87,7 +87,7 @@ export function RegisterForm() {
       </Button>
       <p className="text-sm text-muted-foreground">
         Already registered?{" "}
-        <Link href="/login" className="text-primary underline-offset-4 hover:underline">
+        <Link href="/login" className="text-primary underline underline-offset-4">
           Sign in
         </Link>
       </p>

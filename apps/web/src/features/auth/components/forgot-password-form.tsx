@@ -47,7 +47,7 @@ export function ForgotPasswordForm() {
               {" "}
               <Link
                 href={`/reset-password?token=${encodeURIComponent(result.resetToken)}`}
-                className="font-medium text-primary underline-offset-4 hover:underline"
+                className="font-medium text-primary underline underline-offset-4"
               >
                 Continue to reset
               </Link>

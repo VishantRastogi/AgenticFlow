@@ -14,6 +14,8 @@
     "lint:web": "npm run lint -w @agentflow/web",
     "typecheck:web": "npm run typecheck -w @agentflow/web",
     "test:web": "npm run test -w @agentflow/web",
+    "test:e2e": "npm run test:e2e -w @agentflow/web",
+    "federation:verify": "npm run verify --prefix proofs/module-federation",
     "dev:api": "npm run dev -w @agentflow/api-gateway",
     "build:api": "npm run build -w @agentflow/api-gateway",
     "start:api": "npm run start -w @agentflow/api-gateway",

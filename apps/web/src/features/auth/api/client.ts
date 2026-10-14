@@ -1,4 +1,6 @@
-import { createAuthTransport, type AuthTransport } from "@/features/auth/api/transport"
+import { callContract } from "@/features/api/real-adapter"
+import { apiOperations, type ApiOperationId } from "@/features/api/contract"
+import type { AuthTransport, HttpRequest } from "@/features/auth/api/transport"
 import { clearAuthToken, readAuthToken, writeAuthToken } from "@/features/auth/session-token"
 import type {
   AuthSession,
@@ -17,68 +19,50 @@ export function setAuthTransport(next: AuthTransport | null) {
   transport = next
 }
 
-function getTransport() {
-  return transport ?? createAuthTransport()
+function authRequest<T>(id: ApiOperationId, body?: unknown) {
+  if (!transport) {
+    return callContract<T>(id, { body })
+  }
+
+  const operation = apiOperations[id]
+  const request: HttpRequest = {
+    path: operation.path,
+    method: operation.method,
+    body,
+    token: operation.auth === "bearer" ? readAuthToken() : null,
+  }
+  return transport.request<T>(request)
 }
 
 export async function login(input: LoginInput) {
-  const session = await getTransport().request<AuthSession>({
-    path: "/api/auth/login",
-    method: "POST",
-    body: input,
-  })
+  const session = await authRequest<AuthSession>("auth.login", input)
   writeAuthToken(session.token)
   return session
 }
 
 export async function register(input: RegisterInput) {
-  const session = await getTransport().request<AuthSession>({
-    path: "/api/auth/register",
-    method: "POST",
-    body: input,
-  })
+  const session = await authRequest<AuthSession>("auth.register", input)
   writeAuthToken(session.token)
   return session
 }
 
 export async function logout() {
-  const token = readAuthToken()
-  await getTransport().request<void>({
-    path: "/api/auth/logout",
-    method: "POST",
-    token,
-  })
+  await authRequest<void>("auth.logout")
   clearAuthToken()
 }
 
 export async function getSession() {
-  const token = readAuthToken()
-  return getTransport().request<AuthSession>({
-    path: "/api/auth/session",
-    method: "GET",
-    token,
-  })
+  return authRequest<AuthSession>("auth.session")
 }
 
 export async function requestPasswordReset(input: ForgotPasswordInput) {
-  return getTransport().request<PasswordResetRequest>({
-    path: "/api/auth/forgot-password",
-    method: "POST",
-    body: input,
-  })
+  return authRequest<PasswordResetRequest>("auth.forgotPassword", input)
 }
 
 export async function resetPassword(input: ResetPasswordInput) {
-  return getTransport().request<PasswordResetResult>({
-    path: "/api/auth/reset-password",
-    method: "POST",
-    body: input,
-  })
+  return authRequest<PasswordResetResult>("auth.resetPassword", input)
 }
 
 export async function getMockHint() {
-  return getTransport().request<MockAuthHint>({
-    path: "/api/auth/mock-hint",
-    method: "GET",
-  })
+  return authRequest<MockAuthHint>("auth.mockHint")
 }

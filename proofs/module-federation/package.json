@@ -1,0 +1,23 @@
+{
+  "name": "@agentflow/federation-proof",
+  "private": true,
+  "description": "Isolated Webpack 5 Module Federation host and remote. Not part of the Next.js app.",
+  "scripts": {
+    "build": "webpack --config remote/webpack.config.cjs --mode production && webpack --config host/webpack.config.cjs --mode production",
+    "serve:remote": "node scripts/static.mjs remote/dist 3101",
+    "serve:host": "node scripts/static.mjs host/dist 3100",
+    "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-react": "^7.28.5",
+    "babel-loader": "^10.0.0",
+    "html-webpack-plugin": "^5.6.6",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1"
+  }
+}
