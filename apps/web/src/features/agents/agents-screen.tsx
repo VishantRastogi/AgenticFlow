@@ -1,5 +1,1 @@
-import { ModuleScreen } from "@/components/shared/module-screen"
-
-export function AgentsScreen() {
-  return <ModuleScreen moduleKey="agents" />
-}
+export { AgentsScreen } from "@/features/agents/components/agents-screen"
