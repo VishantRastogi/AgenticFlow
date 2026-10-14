@@ -25,6 +25,7 @@ const screens = [
 describe("route navigation", () => {
   it("registers every mission control destination", () => {
     expect(moduleList().map((item) => item.href)).toEqual([
+      "/dashboard",
       "/overview",
       "/agents",
       "/workflows",
@@ -37,7 +38,11 @@ describe("route navigation", () => {
   })
 
   it.each(screens)("renders the %s destination", (title, Screen) => {
-    render(<Screen />)
+    if (title === "Agents" || title === "Workflows" || title === "Executions" || title === "Analytics" || title === "Deployments" || title === "Audit Logs") {
+      renderWithProviders(<Screen />)
+    } else {
+      render(<Screen />)
+    }
     expect(screen.getByRole("heading", { level: 1, name: title })).toBeInTheDocument()
   })
 

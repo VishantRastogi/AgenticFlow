@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 import {
+  Activity,
   Bot,
   ChartColumn,
   GitBranch,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react"
 
 export type ModuleKey =
+  | "dashboard"
   | "overview"
   | "agents"
   | "workflows"
@@ -40,6 +42,14 @@ export type ModuleDefinition = {
 }
 
 export const modules: Record<ModuleKey, ModuleDefinition> = {
+  dashboard: {
+    key: "dashboard",
+    href: "/dashboard",
+    title: "Dashboard",
+    description: "Command center for agents, executions, and runtime health.",
+    icon: Activity,
+    keywords: "command center metrics health live runs",
+  },
   overview: {
     key: "overview",
     href: "/overview",
@@ -60,104 +70,62 @@ export const modules: Record<ModuleKey, ModuleDefinition> = {
     key: "agents",
     href: "/agents",
     title: "Agents",
-    description: "Define and supervise the agents that run in this workspace.",
+    description: "Create, inspect, and run the agents in this workspace.",
     icon: Bot,
-    keywords: "bots workers assistants",
-    emptyTitle: "No agents yet",
-    emptyDescription:
-      "Agent definitions will show up here when the agents service is connected.",
-    action: {
-      label: "New agent",
-      reason: "Creating agents is unavailable until the agents service is connected.",
-    },
+    keywords: "bots workers assistants studio",
   },
   workflows: {
     key: "workflows",
     href: "/workflows",
     title: "Workflows",
-    description: "Orchestrate how agents hand work to each other.",
+    description: "Draft and publish workflows on the canvas.",
     icon: GitBranch,
-    keywords: "graphs canvas pipelines",
-    emptyTitle: "No workflows yet",
-    emptyDescription:
-      "The orchestration canvas is unavailable until the workflow service is connected.",
-    action: {
-      label: "New workflow",
-      reason: "Creating workflows is unavailable until the workflow service is connected.",
-    },
+    keywords: "graphs canvas pipelines editor",
   },
   executions: {
     key: "executions",
     href: "/executions",
     title: "Executions",
-    description: "Inspect runs after an execution service is connected.",
+    description: "Search run history, logs, and simulated job progress.",
     icon: Waypoints,
-    keywords: "runs jobs history",
-    emptyTitle: "No executions yet",
-    emptyDescription:
-      "Runs will be listed here when an execution service is connected.",
-    action: {
-      label: "Run workflow",
-      reason: "Runs are unavailable until the execution service is connected.",
-    },
+    keywords: "runs jobs history logs",
   },
   analytics: {
     key: "analytics",
     href: "/analytics",
     title: "Analytics",
-    description: "Performance series for this workspace will render in this view.",
+    description: "Throughput, latency, tokens, and cost derived from execution records.",
     icon: ChartColumn,
-    keywords: "metrics charts performance",
-    action: {
-      label: "Export",
-      reason: "Exports are unavailable until analytics is connected.",
-    },
-    chart: {
-      title: "Workspace series",
-      description: "Charts stay empty until an analytics source is connected.",
-    },
+    keywords: "metrics charts performance tokens cost",
   },
   deployments: {
     key: "deployments",
     href: "/deployments",
     title: "Deployments",
-    description: "Release targets for agents and workflows.",
+    description: "Environment health, releases, and simulated rollbacks.",
     icon: Rocket,
-    keywords: "releases environments ship",
-    emptyTitle: "No deployments yet",
-    emptyDescription:
-      "Deployment targets will appear here when the deployment service is connected.",
-    action: {
-      label: "Deploy",
-      reason: "Deploys are unavailable until the deployment service is connected.",
-    },
+    keywords: "releases environments ship rollback",
   },
   "audit-logs": {
     key: "audit-logs",
     href: "/audit-logs",
     title: "Audit Logs",
-    description: "A record of workspace activity once the audit service is connected.",
+    description: "Search workspace changes recorded by the mock API.",
     icon: ScrollText,
     keywords: "security history trail events",
-    emptyTitle: "No audit events yet",
-    emptyDescription:
-      "Audit events will appear here when the audit log service is connected.",
-    action: {
-      label: "Export",
-      reason: "Exports are unavailable until the audit log service is connected.",
-    },
   },
   settings: {
     key: "settings",
     href: "/settings",
     title: "Settings",
-    description: "Browser preferences for this Mission Control shell.",
+    description: "Organization, members, theme, and local integration records.",
     icon: Settings,
     keywords: "preferences theme account workspace",
   },
 }
 
 export const moduleOrder = [
+  "dashboard",
   "overview",
   "agents",
   "workflows",
