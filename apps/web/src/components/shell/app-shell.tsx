@@ -1,12 +1,19 @@
 "use client"
 
 import { useLayoutEffect } from "react"
+import { usePathname } from "next/navigation"
 import { AppSidebar } from "@/components/shell/app-sidebar"
 import { TopBar } from "@/components/shell/top-bar"
 import { SearchCommand } from "@/components/shared/search-command"
 import { useUiStore } from "@/stores/ui-store"
 
+function isWorkflowCanvas(pathname: string) {
+  return pathname === "/workflows/new" || /^\/workflows\/[^/]+\/edit$/.test(pathname)
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const canvas = isWorkflowCanvas(pathname)
   useLayoutEffect(() => {
     void useUiStore.persist.rehydrate()
   }, [])
@@ -22,8 +29,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
-        <main id="main-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto outline-none">
-          <div className="mx-auto w-full max-w-[1200px] px-4 py-6 md:px-8 md:py-8">{children}</div>
+        <main id="main-content" tabIndex={-1} className={canvas ? "flex min-h-0 flex-1 flex-col overflow-hidden outline-none" : "min-h-0 flex-1 overflow-y-auto outline-none"}>
+          {canvas ? <div className="min-h-0 flex-1">{children}</div> : <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 md:py-8">{children}</div>}
         </main>
       </div>
       <SearchCommand />

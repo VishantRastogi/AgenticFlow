@@ -179,6 +179,36 @@ html[data-sidebar="collapsed"] .sidebar-copy {
   border: 0;
 }
 
+.agentflow-canvas .react-flow__controls-button,
+.agentflow-canvas .react-flow__minimap {
+  background: var(--card);
+  border-color: var(--border);
+  fill: var(--foreground);
+}
+
+.agentflow-canvas .react-flow__controls-button {
+  width: 28px;
+  height: 28px;
+}
+
+.agentflow-canvas .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--card);
+  background: var(--primary);
+}
+
+.agentflow-canvas .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+
+@media (pointer: coarse) {
+  .agentflow-canvas .react-flow__controls-button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
