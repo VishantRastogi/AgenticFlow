@@ -19,5 +19,10 @@
     "start:api": "npm run start -w @agentflow/api-gateway",
     "typecheck:api": "npm run typecheck -w @agentflow/api-gateway"
   },
-  "license": "ISC"
+  "license": "ISC",
+  "msw": {
+    "workerDirectory": [
+      "apps/web/public"
+    ]
+  }
 }
