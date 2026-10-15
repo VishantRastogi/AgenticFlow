@@ -6,10 +6,17 @@ import type { ExecutionListParams, ExecutionRange, ExecutionSort, ExecutionSumma
 export const EXECUTION_PAGE_SIZE = 8
 
 const environments = new Set<RuntimeEnvironment>(["production", "staging", "sandbox"])
-const statuses = new Set<ObservatoryStatus>(["queued", "running", "completed", "failed", "cancelled"])
+const statuses = new Set<ObservatoryStatus>(["queued", "running", "waiting_for_approval", "completed", "failed", "cancelled"])
 const ranges = new Set<ExecutionRange>(["all", "24h", "7d", "30d"])
 const sorts = new Set<ExecutionSort>(["newest", "oldest", "duration", "status", "agent"])
-const statusRank: Record<ObservatoryStatus, number> = { running: 0, queued: 1, failed: 2, cancelled: 3, completed: 4 }
+const statusRank: Record<ObservatoryStatus, number> = {
+  running: 0,
+  waiting_for_approval: 1,
+  queued: 2,
+  failed: 3,
+  cancelled: 4,
+  completed: 5,
+}
 
 export function isExecutionListQuery(value: {
   q: string
@@ -35,29 +42,36 @@ export function queryExecutions(
   agents: AgentProfile[],
   query: ExecutionListParams,
   asOf: string,
+  extras: ExecutionSummary[] = [],
 ): { executions: ExecutionSummary[]; total: number } {
   const names = new Map(agents.map((agent) => [agent.id, agent]))
   const asOfMs = Date.parse(asOf)
   const windowMs = query.range === "24h" ? 86_400_000 : query.range === "7d" ? 7 * 86_400_000 : query.range === "30d" ? 30 * 86_400_000 : null
   const needle = query.q.trim().toLowerCase()
-  const rows = records
-    .map((record) => {
-      const agent = names.get(record.agentId)
-      return projectExecution({
-        record,
-        agentName: agent?.name ?? record.agentId,
-        agentStatus: agent?.status ?? "idle",
-        retryPolicy: agent?.retryPolicy ?? "fixed",
-        asOf,
-      })
+  const catalog = records.map((record) => {
+    const agent = names.get(record.agentId)
+    return projectExecution({
+      record,
+      agentName: agent?.name ?? record.agentId,
+      agentStatus: agent?.status ?? "idle",
+      retryPolicy: agent?.retryPolicy ?? "fixed",
+      asOf,
     })
+  })
+  const seen = new Set(catalog.map((execution) => execution.id))
+  const rows = [...catalog, ...extras.filter((execution) => !seen.has(execution.id))]
     .filter((execution) => {
       const started = Date.parse(execution.startedAt)
       const matchesWindow = windowMs === null || (started >= asOfMs - windowMs && started <= asOfMs)
       const matchesAgent = query.agent === "all" || execution.agentId === query.agent
       const matchesEnvironment = query.environment === "all" || execution.environment === query.environment
       const matchesStatus = query.status === "all" || execution.status === query.status
-      const matchesQuery = needle.length === 0 || execution.id.toLowerCase().includes(needle) || execution.agentName.toLowerCase().includes(needle)
+      const matchesQuery =
+        needle.length === 0 ||
+        execution.id.toLowerCase().includes(needle) ||
+        execution.agentName.toLowerCase().includes(needle) ||
+        (execution.traceId ?? "").toLowerCase().includes(needle) ||
+        (execution.versionLabel ?? "").toLowerCase().includes(needle)
       return matchesWindow && matchesAgent && matchesEnvironment && matchesStatus && matchesQuery
     })
     .sort((a, b) => compareExecutions(a, b, query.sort))
@@ -79,6 +93,14 @@ function summarize(execution: ExecutionSummary): ExecutionSummary {
     retryOf: execution.retryOf,
     progress: execution.progress,
     simulated: true,
+    source: execution.source ?? "catalog",
+    versionLabel: execution.versionLabel ?? null,
+    traceId: execution.traceId ?? null,
+    workspaceId: execution.workspaceId ?? "local",
+    tokenCount: execution.tokenCount ?? null,
+    estimatedCostUsd: execution.estimatedCostUsd ?? null,
+    model: execution.model ?? null,
+    workflowId: execution.workflowId ?? null,
   }
 }
 

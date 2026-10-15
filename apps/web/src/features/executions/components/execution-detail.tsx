@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { isApiError } from "@/features/auth/api/errors"
 import { ExecutionLogViewer } from "@/features/executions/components/execution-log-viewer"
+import { ExecutionObservatory } from "@/features/executions/components/execution-observatory"
 import { ExecutionProgress, ExecutionTimeline } from "@/features/executions/components/execution-timeline"
 import { useCancelExecution, useExecution, useRetryExecution } from "@/features/executions/hooks"
 import type { ObservatoryStatus } from "@/features/executions/types"
@@ -20,6 +21,7 @@ import { formatDuration, formatTimestamp } from "@/features/dashboard/format"
 const statusTone = {
   queued: "warning",
   running: "info",
+  waiting_for_approval: "warning",
   completed: "success",
   failed: "danger",
   cancelled: "neutral",
@@ -28,6 +30,7 @@ const statusTone = {
 const statusLabel: Record<ObservatoryStatus, string> = {
   queued: "Queued",
   running: "Running",
+  waiting_for_approval: "Waiting for approval",
   completed: "Completed",
   failed: "Failed",
   cancelled: "Cancelled",
@@ -118,7 +121,14 @@ export function ExecutionDetailScreen({ executionId }: { executionId: string }) 
                 <Item term="Attempt" value={`${detail.retry.attempt} of ${detail.retry.maxAttempts}`} />
                 <Item term="Retry policy" value={detail.retry.policy} />
                 <Item term="Previous run" value={detail.retry.retryOf ?? "—"} href={detail.retry.retryOf ? `/executions/${detail.retry.retryOf}` : undefined} />
-                <Item term="Workflow" value="No workflow is attached." />
+                <Item term="Version" value={detail.versionLabel ?? "Unknown"} />
+                <Item term="Trace" value={detail.traceId ?? "Not recorded"} />
+                <Item term="Workspace" value={detail.workspaceId ?? "local"} />
+                <Item
+                  term="Workflow"
+                  value={detail.workflowId ?? "No workflow is attached."}
+                  href={detail.workflowId ? `/workflows/${detail.workflowId}/edit` : undefined}
+                />
               </dl>
             </section>
           </div>
@@ -141,6 +151,7 @@ export function ExecutionDetailScreen({ executionId }: { executionId: string }) 
             </section>
           ) : null}
           <ExecutionLogViewer executionId={detail.id} logs={detail.logs} />
+          <ExecutionObservatory executionId={detail.id} />
         </>
       ) : null}
 

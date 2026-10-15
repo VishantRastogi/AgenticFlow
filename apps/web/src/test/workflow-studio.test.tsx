@@ -5,9 +5,11 @@ import {
   getWorkflow,
   getWorkflowStudio,
   listWorkflowExecutions,
+  publishWorkflow,
   publishWorkflowSnapshot,
   rollbackWorkflowSnapshot,
   startWorkflowExecution,
+  startWorkflowRun,
   updateWorkflow,
   createWorkflow,
   decideWorkflowApproval,
@@ -90,12 +92,23 @@ describe("workflow studio", () => {
       note: "Publish the canvas.",
     })).rejects.toMatchObject({ status: 409 })
 
-    const other = await publishWorkflowSnapshot(created.workflow.id, {
+    const otherCreated = await createWorkflow({ name: "Other snapshot lane", description: "A draft.", graph, workspaceId: "other" })
+    const other = await publishWorkflowSnapshot(otherCreated.workflow.id, {
       workspaceId: "other",
       version: "1.2.0",
       note: "Other workspace snapshot.",
     })
     expect(other.versions).toHaveLength(1)
+    await expect(getWorkflowStudio("other", created.workflow.id)).rejects.toMatchObject({
+      status: 404,
+      code: "not_found",
+      message: "Workflow not found.",
+    })
+    await expect(getWorkflowStudio("local", "wf_missing_workflow")).rejects.toMatchObject({
+      status: 404,
+      code: "not_found",
+      message: "Workflow not found.",
+    })
 
     const edited = structuredClone(graph)
     const llm = edited.nodes.find((node) => node.type === "llm")
@@ -107,7 +120,7 @@ describe("workflow studio", () => {
     expect(stored.versions[0]?.graph.nodes.map((node) => node.id)).toEqual(ids)
     expect(stored.versions[0]?.graph.nodes.some((node) => node.data.label === "Renamed generation")).toBe(false)
     expect((await getWorkflowStudio("local", created.workflow.id)).versions[0]?.graph.nodes).toHaveLength(ids.length)
-    expect((await getWorkflowStudio("other", created.workflow.id)).versions[0]?.graph.nodes).toHaveLength(ids.length)
+    expect((await getWorkflowStudio("other", otherCreated.workflow.id)).versions[0]?.graph.nodes).toHaveLength(ids.length)
 
     const restored = await rollbackWorkflowSnapshot(created.workflow.id, { workspaceId: "local", version: "1.2.0" })
     expect(restored.versions[0]?.graph.nodes.map((node) => node.id)).toEqual(ids)
@@ -145,6 +158,10 @@ describe("workflow studio", () => {
     const cancelled = await cancelWorkflowExecution(approval.workflow.id, waiting.id, "local")
     expect(cancelled.status).toBe("cancelled")
     expect(cancelled.nodes.some((node) => node.nodeId === approved.node.id)).toBe(false)
+    const cancelledAgain = await cancelWorkflowExecution(approval.workflow.id, waiting.id, "local")
+    expect(cancelledAgain.id).toBe(cancelled.id)
+    expect(cancelledAgain.status).toBe("cancelled")
+    expect(cancelledAgain.nodes).toHaveLength(cancelled.nodes.length)
     await expect(decideWorkflowApproval(approval.workflow.id, waiting.id, {
       workspaceId: "local",
       decision: "approve",
@@ -184,7 +201,16 @@ describe("workflow studio", () => {
     const history = await listWorkflowExecutions("local", approval.workflow.id)
     expect(history.executions.length).toBeGreaterThan(0)
     expect(history.executions[0]?.traceId).toMatch(/^trc_wf_/)
-    expect((await listWorkflowExecutions("other", approval.workflow.id)).executions).toHaveLength(0)
+    await expect(listWorkflowExecutions("other", approval.workflow.id)).rejects.toMatchObject({
+      status: 404,
+      code: "not_found",
+      message: "Workflow not found.",
+    })
+    await expect(listWorkflowExecutions("local", "wf_missing_workflow")).rejects.toMatchObject({
+      status: 404,
+      code: "not_found",
+      message: "Workflow not found.",
+    })
   })
 
   it("selects the structured error branch and a published agent version", async () => {
@@ -231,5 +257,51 @@ describe("workflow studio", () => {
     expect(published.publishedVersion).toBe("2.0.0")
     const run = await startWorkflowExecution(agentWorkflow.workflow.id, { workspaceId: "local", version: "2.0.0" })
     expect(run.nodes.some((node) => node.detail.includes("agt_cedar"))).toBe(true)
+  })
+
+  it("scopes catalog workflows and publishes an immutable snapshot", async () => {
+    const graph = chain(["llm", "output"])
+    const created = await createWorkflow({ name: "Release lane", description: "A draft.", graph })
+    await expect(getWorkflow(created.workflow.id, "other")).rejects.toMatchObject({
+      status: 404,
+      code: "unknown",
+      message: "This workflow is not in the catalog.",
+    })
+    await expect(getWorkflow("wf_missing_workflow", "local")).rejects.toMatchObject({
+      status: 404,
+      code: "unknown",
+      message: "This workflow is not in the catalog.",
+    })
+
+    const released = await publishWorkflow(created.workflow.id)
+    expect(released.workflow.version).toBe(2)
+    expect(released.workflow.status).toBe("published")
+    const studio = await getWorkflowStudio("local", created.workflow.id)
+    expect(studio.publishedVersion).toBe("2")
+    expect(studio.versions[0]?.immutable).toBe(true)
+    await publishWorkflowSnapshot(created.workflow.id, {
+      workspaceId: "local",
+      version: "2.0.0",
+      note: "Same canvas.",
+    })
+    await expect(publishWorkflowSnapshot(created.workflow.id, {
+      workspaceId: "local",
+      version: "2.0.0",
+      note: "Same canvas.",
+    })).rejects.toMatchObject({ status: 409 })
+
+    const edited = structuredClone(graph)
+    edited.nodes.push({ id: "node_extra", type: "delay", position: { x: 8, y: 8 }, data: { label: "Delay", durationMs: 1000 } })
+    await updateWorkflow(created.workflow.id, { graph: edited })
+    const run = await startWorkflowRun(created.workflow.id)
+    expect(run.run.steps.map((step) => step.nodeId)).not.toContain("node_extra")
+    const stored = await getWorkflowStudio("local", created.workflow.id)
+    expect(stored.versions.find((version) => version.version === "2")?.graph.nodes.some((node) => node.id === "node_extra")).toBe(false)
+
+    const controller = new AbortController()
+    controller.abort()
+    await expect(startWorkflowExecution(created.workflow.id, { workspaceId: "local", version: "draft" }, controller.signal)).rejects.toMatchObject({
+      code: "cancelled",
+    })
   })
 })

@@ -234,6 +234,7 @@ export function tickStoredExecution(id: string) {
 export function cancelStoredExecution(id: string) {
   const current = listExecutions().find((execution) => execution.id === id)
   if (!current) return { error: "missing" as const }
+  if (current.status === "cancelled") return { execution: current }
   const permission = cancelPermission(current.status)
   if (!permission.allowed) return { error: "invalid" as const, reason: permission.reason }
   const overlay = readOverlay()

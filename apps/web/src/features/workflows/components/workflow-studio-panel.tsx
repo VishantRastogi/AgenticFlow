@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { isApiError } from "@/features/auth/api/errors"
@@ -55,7 +55,9 @@ export function WorkflowStudioPanel({ workflowId, graph }: { workflowId: string;
   const [confirm, setConfirm] = useState(false)
   const [runVersion, setRunVersion] = useState("draft")
   const [execution, setExecution] = useState<WorkflowExecutionRecord | null>(null)
+  const [requestPending, setRequestPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
   const [left, setLeft] = useState("draft")
   const [right, setRight] = useState(studio.data?.versions[0]?.version ?? "draft")
   const versions = studio.data?.versions ?? []
@@ -64,13 +66,24 @@ export function WorkflowStudioPanel({ workflowId, graph }: { workflowId: string;
   const changes = leftGraph && rightGraph ? compareWorkflowGraphs(leftGraph, rightGraph) : []
 
   async function run() {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    setRequestPending(true)
     setError(null)
     try {
-      const next = await startWorkflowExecution(workflowId, { workspaceId: localWorkspace.id, version: runVersion })
+      const next = await startWorkflowExecution(workflowId, { workspaceId: localWorkspace.id, version: runVersion }, controller.signal)
+      if (controller.signal.aborted) return
       setExecution(next)
       await client.invalidateQueries({ queryKey: ["workflows", workflowId, "executions"] })
     } catch (reason) {
+      if (controller.signal.aborted || (isApiError(reason) && reason.code === "cancelled")) {
+        setError("The request was cancelled.")
+        return
+      }
       setError(isApiError(reason) ? reason.message : "The workflow service could not be reached.")
+    } finally {
+      if (abortRef.current === controller) setRequestPending(false)
     }
   }
 
@@ -144,21 +157,22 @@ export function WorkflowStudioPanel({ workflowId, graph }: { workflowId: string;
       </label>
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={() => void run()}>Run simulation</Button>
+        <Button type="button" variant="outline" disabled={!requestPending} onClick={() => abortRef.current?.abort()}>
+          Abort request
+        </Button>
         <Button
           type="button"
           variant="outline"
+          disabled={!execution || execution.status === "completed" || execution.status === "failed" || execution.status === "cancelled"}
           onClick={() => {
-            if (!execution || execution.status === "completed" || execution.status === "failed" || execution.status === "cancelled") {
-              setExecution(null)
-              return
-            }
+            if (!execution) return
             void cancelWorkflowExecution(workflowId, execution.id, localWorkspace.id).then((next) => {
               setExecution(next)
               return client.invalidateQueries({ queryKey: ["workflows", workflowId, "executions"] })
             })
           }}
         >
-          Stop
+          Cancel execution
         </Button>
         {execution?.status === "waiting_for_approval" ? (
           <>

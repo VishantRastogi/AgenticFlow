@@ -9,10 +9,8 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { isApiError } from "@/features/auth/api/errors"
-import { ExecutionProgress } from "@/features/executions/components/execution-timeline"
 import { useExecutionList } from "@/features/executions/hooks"
 import type { ExecutionListParams, ExecutionSummary, ObservatoryStatus } from "@/features/executions/types"
-import { isTerminalStatus } from "@/features/executions/types"
 import { formatDuration, formatTimestamp } from "@/features/dashboard/format"
 import { motionTransition } from "@/lib/motion"
 
@@ -21,6 +19,7 @@ const selectClass = "h-11 rounded-lg border border-input bg-background px-2.5 te
 const statusTone = {
   queued: "warning",
   running: "info",
+  waiting_for_approval: "warning",
   completed: "success",
   failed: "danger",
   cancelled: "neutral",
@@ -29,6 +28,7 @@ const statusTone = {
 const statusLabel: Record<ObservatoryStatus, string> = {
   queued: "Queued",
   running: "Running",
+  waiting_for_approval: "Waiting for approval",
   completed: "Completed",
   failed: "Failed",
   cancelled: "Cancelled",
@@ -61,7 +61,7 @@ export function ExecutionsScreen() {
         <p className="text-xs font-medium tracking-wide text-highlight uppercase">Execution observatory</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Executions</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Simulated run history shared with Agent Studio and the command center. Progress on this page is a mock lifecycle, not a live cluster.
+          Agent tests, workflow runs, and catalog runs for this workspace. Simulated rows stay labeled. Missing versions stay unknown.
         </p>
       </header>
 
@@ -86,7 +86,7 @@ export function ExecutionsScreen() {
           ))}
         </Filter>
         <Filter label="Status" value={status} onChange={update(setStatus)}>
-          {["all", "queued", "running", "completed", "failed", "cancelled"].map((item) => (
+          {["all", "queued", "running", "waiting_for_approval", "completed", "failed", "cancelled"].map((item) => (
             <option key={item} value={item}>
               {item}
             </option>
@@ -118,11 +118,23 @@ export function ExecutionsScreen() {
         <p className="text-sm text-muted-foreground">No executions match these filters.</p>
       ) : null}
       {list.data && list.data.executions.length > 0 ? (
-        <motion.ul className="flex flex-col gap-3" initial={false} animate="show">
-          {list.data.executions.map((execution, index) => (
-            <ExecutionRow key={execution.id} execution={execution} index={index} reduced={reduced} />
-          ))}
-        </motion.ul>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[52rem] border-separate border-spacing-y-2 text-left text-sm">
+            <caption className="sr-only">Execution history</caption>
+            <thead className="text-xs text-muted-foreground">
+              <tr>
+                {["Run", "Subject", "Version", "Status", "Started", "Ended", "Duration", "Model", "Tokens", "Cost", "Workspace", "Trace"].map((heading) => (
+                  <th key={heading} scope="col" className="px-2 font-medium">{heading}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {list.data.executions.map((execution, index) => (
+                <ExecutionRow key={execution.id} execution={execution} index={index} reduced={reduced} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       {total > (list.data?.pageSize ?? 8) ? (
         <div className="flex items-center justify-between gap-3">
@@ -144,42 +156,44 @@ export function ExecutionsScreen() {
 }
 
 function ExecutionRow({ execution, index, reduced }: { execution: ExecutionSummary; index: number; reduced: boolean }) {
-  const moving = !reduced && !isTerminalStatus(execution.status)
+  const subject = execution.workflowId ? `/workflows/${execution.workflowId}/edit` : execution.agentId ? `/agents/${execution.agentId}` : undefined
+  const ended = execution.durationMs === null ? null : new Date(Date.parse(execution.startedAt) + execution.durationMs).toISOString()
   return (
-    <motion.li
-      className="rounded-xl bg-card p-4 ring-1 ring-foreground/10"
-      initial={reduced ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+    <motion.tr
+      className="bg-card"
+      initial={reduced ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
       transition={{ ...motionTransition(reduced), delay: reduced ? 0 : Math.min(index, 5) * 0.04 }}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link href={`/executions/${execution.id}`} className="font-mono text-sm font-medium hover:text-highlight">
-            {execution.id}
-          </Link>
-          <p className="mt-1 text-sm text-muted-foreground">
-            <Link href={`/agents/${execution.agentId}`} className="hover:text-foreground">
-              {execution.agentName}
-            </Link>
-            {" · "}
-            {execution.environment}
-            {" · "}
-            {formatTimestamp(execution.startedAt)}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-muted-foreground">{formatDuration(execution.durationMs)}</span>
-          <StatusBadge tone={statusTone[execution.status]}>
-            {statusLabel[execution.status]}
-            {execution.status === "running" ? <span className="sr-only">, simulated</span> : null}
-          </StatusBadge>
-        </div>
-      </div>
-      <div className="mt-3">
-        <ExecutionProgress value={execution.progress} moving={moving} />
-      </div>
-    </motion.li>
+      <td className="rounded-l-lg px-2 py-3">
+        <Link href={`/executions/${execution.id}`} className="font-mono text-sm font-medium hover:text-highlight">
+          {execution.id}
+        </Link>
+      </td>
+      <td className="px-2 py-3">
+        {subject ? <Link href={subject} className="hover:text-highlight">{execution.agentName}</Link> : execution.agentName}
+      </td>
+      <Cell>{execution.versionLabel ?? "Unknown"}</Cell>
+      <td className="px-2 py-3">
+        <StatusBadge tone={statusTone[execution.status]}>
+          {statusLabel[execution.status]}
+          {execution.simulated ? <span className="sr-only">, simulated</span> : null}
+        </StatusBadge>
+      </td>
+      <Cell>{formatTimestamp(execution.startedAt)}</Cell>
+      <Cell>{ended ? formatTimestamp(ended) : "—"}</Cell>
+      <Cell>{formatDuration(execution.durationMs)}</Cell>
+      <Cell>{execution.model ?? "Not recorded"}</Cell>
+      <Cell>{execution.tokenCount === null || execution.tokenCount === undefined ? "Not recorded" : String(execution.tokenCount)}</Cell>
+      <Cell>{execution.estimatedCostUsd === null || execution.estimatedCostUsd === undefined ? "Not recorded" : `$${execution.estimatedCostUsd.toFixed(6)}`}</Cell>
+      <Cell>{execution.workspaceId ?? "local"}</Cell>
+      <td className="rounded-r-lg px-2 py-3 font-mono text-xs">{execution.traceId ?? "Not recorded"}</td>
+    </motion.tr>
   )
+}
+
+function Cell({ children }: { children: string }) {
+  return <td className="px-2 py-3 text-muted-foreground">{children}</td>
 }
 
 function Filter<T extends string>({ label, value, onChange, children }: { label: string; value: T; onChange: (value: T) => void; children: ReactNode }) {

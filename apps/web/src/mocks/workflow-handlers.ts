@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw"
 import type { ApiErrorBody } from "@/features/auth/types"
 import { isWorkflowGraph } from "@/features/workflows/graph"
+import { isWorkspaceId } from "@/features/knowledge/validate"
 import { isWorkflowListQuery, queryWorkflows } from "@/features/workflows/query"
 import type { WorkflowWriteInput } from "@/features/workflows/types"
 import { auditActor, recordAudit } from "@/mocks/audit-store"
@@ -9,7 +10,6 @@ import {
   deleteStoredWorkflow,
   getStoredWorkflow,
   listWorkflows,
-  publishStoredWorkflow,
   startStoredRun,
   updateStoredWorkflow,
 } from "@/mocks/workflow-store"
@@ -18,6 +18,8 @@ import {
   decideWorkflowApproval,
   getWorkflowStudio,
   listWorkflowExecutions,
+  publishedWorkflowGraph,
+  publishWorkflowRelease,
   publishWorkflowStudio,
   rollbackWorkflowStudio,
   startWorkflowExecution,
@@ -33,8 +35,13 @@ function error(status: number, body: ApiErrorBody) {
 function readWrite(body: Partial<WorkflowWriteInput>) {
   const name = body.name?.trim() ?? ""
   const description = body.description?.trim() ?? ""
-  if (name.length < 2 || name.length > 64 || description.length > 280 || !isWorkflowGraph(body.graph)) return null
-  return { name, description, graph: body.graph }
+  const workspaceId = body.workspaceId?.trim() || "local"
+  if (name.length < 2 || name.length > 64 || description.length > 280 || !isWorkflowGraph(body.graph) || !isWorkspaceId(workspaceId)) return null
+  return { name, description, graph: body.graph, workspaceId }
+}
+
+function workspaceOrLocal(request: Request) {
+  return new URL(request.url).searchParams.get("workspaceId") || "local"
 }
 
 function isFailure(result: unknown): result is StoreFailure {
@@ -114,13 +121,14 @@ export const workflowHandlers = [
     if (!isWorkflowListQuery(query)) {
       return error(400, { code: "validation_error", message: "Workflow filters are not supported." })
     }
-    return HttpResponse.json({ ...queryWorkflows(listWorkflows(), query), simulated: true })
+    return HttpResponse.json({ ...queryWorkflows(listWorkflows(workspaceOrLocal(request)), query), simulated: true })
   }),
 
   http.post("*/api/workflows", async ({ request }) => {
     const parsed = readWrite((await request.json()) as Partial<WorkflowWriteInput>)
     if (!parsed) return error(400, { code: "validation_error", message: "Enter a workflow name and a graph." })
     const workflow = createStoredWorkflow(parsed)
+    if (!workflow) return error(400, { code: "validation_error", message: "Enter a workflow name and a graph." })
     recordAudit({
       actor: auditActor(request),
       action: "workflow.created",
@@ -133,8 +141,8 @@ export const workflowHandlers = [
     return HttpResponse.json({ workflow }, { status: 201 })
   }),
 
-  http.get("*/api/workflows/:id", ({ params }) => {
-    const workflow = getStoredWorkflow(String(params.id))
+  http.get("*/api/workflows/:id", ({ params, request }) => {
+    const workflow = getStoredWorkflow(String(params.id), workspaceOrLocal(request))
     if (!workflow) return error(404, { code: "unknown", message: "This workflow is not in the catalog." })
     return HttpResponse.json({ workflow, simulated: true })
   }),
@@ -157,7 +165,7 @@ export const workflowHandlers = [
       ...(description !== undefined ? { description } : {}),
       ...(body.graph ? { graph: body.graph } : {}),
       ...(body.status === "draft" ? { status: "draft" as const } : {}),
-    })
+    }, workspaceOrLocal(request))
     if (!workflow) return error(404, { code: "unknown", message: "This workflow is not in the catalog." })
     recordAudit({
       actor: auditActor(request),
@@ -172,12 +180,15 @@ export const workflowHandlers = [
   }),
 
   http.post("*/api/workflows/:id/publish", ({ params, request }) => {
-    const result = publishStoredWorkflow(String(params.id))
-    if (result.error === "missing") return error(404, { code: "unknown", message: "This workflow is not in the catalog." })
-    if (result.error === "invalid") {
+    const result = publishWorkflowRelease(String(params.id), workspaceOrLocal(request))
+    if ("error" in result && result.error === "missing") return error(404, { code: "unknown", message: "This workflow is not in the catalog." })
+    if ("error" in result && result.error === "invalid") {
       return error(400, { code: "validation_error", message: result.issues[0]?.message ?? "This workflow is not ready to publish." })
     }
-    if (!result.workflow) return error(404, { code: "unknown", message: "This workflow is not in the catalog." })
+    if ("error" in result && result.error === "duplicate") {
+      return error(409, { code: "invalid_job_transition", message: result.message })
+    }
+    if (!("workflow" in result)) return error(404, { code: "unknown", message: "This workflow is not in the catalog." })
     recordAudit({
       actor: auditActor(request),
       action: "workflow.published",
@@ -191,7 +202,9 @@ export const workflowHandlers = [
   }),
 
   http.post("*/api/workflows/:id/runs", ({ params, request }) => {
-    const result = startStoredRun(String(params.id))
+    const workspaceId = workspaceOrLocal(request)
+    const snapshot = publishedWorkflowGraph(workspaceId, String(params.id))
+    const result = startStoredRun(String(params.id), workspaceId, snapshot ?? undefined)
     if (result.error === "missing") return error(404, { code: "unknown", message: "This workflow is not in the catalog." })
     if (result.error === "invalid") {
       return error(400, { code: "validation_error", message: result.issues[0]?.message ?? "This workflow cannot run yet." })
@@ -210,7 +223,7 @@ export const workflowHandlers = [
 
   http.delete("*/api/workflows/:id", ({ params, request }) => {
     const id = String(params.id)
-    if (!deleteStoredWorkflow(id)) {
+    if (!deleteStoredWorkflow(id, workspaceOrLocal(request))) {
       return error(404, { code: "unknown", message: "This workflow is not in the catalog." })
     }
     recordAudit({

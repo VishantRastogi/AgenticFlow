@@ -106,6 +106,8 @@ export type WorkflowSummary = {
 
 export type WorkflowRecord = WorkflowSummary & {
   graph: WorkflowGraph
+  /** Omitted on catalog fixtures, which belong to the local workspace. */
+  workspaceId?: string
 }
 
 export type WorkflowListResponse = {
@@ -126,6 +128,7 @@ export type WorkflowWriteInput = {
   name: string
   description: string
   graph: WorkflowGraph
+  workspaceId?: string
 }
 
 export type RunStep = {

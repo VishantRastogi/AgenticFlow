@@ -117,6 +117,8 @@ export type AgentTestRequest = {
   /** `draft` or a published version. */
   version: string
   input: string
+  attempt?: number
+  retryOf?: string | null
 }
 
 export type AgentExecutionStep = {
@@ -160,6 +162,14 @@ export type AgentTestRunRecord = {
   startedAt: string
   durationMs: number
   simulated: true
+  input?: string
+  attempt?: number
+  retryOf?: string | null
+  usage?: AgentTestResponse["usage"]
+  estimatedCostUsd?: number
+  provider?: string
+  model?: string
+  error?: string | null
 }
 
 export type AgentTestRunList = {

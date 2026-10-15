@@ -11,14 +11,14 @@ import type {
   WorkflowStudioRecord,
   WorkflowValidationResult,
 } from "@/features/workflows/studio-types"
-import type { WorkflowGraph } from "@/features/workflows/types"
+import type { WorkflowGraph, WorkflowIssue, WorkflowRecord } from "@/features/workflows/types"
 import { validateWorkflow, type WorkflowReferenceIndex } from "@/features/workflows/validate"
 import { isWorkspaceId } from "@/features/knowledge/validate"
 import { getAgentStudio } from "@/mocks/agent-studio-store"
 import { SIMULATED_NOW } from "@/mocks/fixtures/operations"
 import { listIndexedChunks, listKnowledgeBases, type StoreFailure } from "@/mocks/knowledge-store"
 import { listAgents } from "@/mocks/operations-store"
-import { getStoredWorkflow, updateStoredWorkflow } from "@/mocks/workflow-store"
+import { applyPublishedRelease, getStoredWorkflow, updateStoredWorkflow } from "@/mocks/workflow-store"
 
 const STORAGE_KEY = "agentflow-mock-workflow-studio"
 
@@ -66,7 +66,7 @@ function key(workspaceId: string, workflowId: string) {
 
 function requireWorkflow(workspaceId: string, workflowId: string): StoreFailure | null {
   if (!isWorkspaceId(workspaceId)) return failure(400, "validation_error", "A workspace id is required.")
-  if (!getStoredWorkflow(workflowId)) return failure(404, "not_found", "Workflow not found.")
+  if (!getStoredWorkflow(workflowId, workspaceId)) return failure(404, "not_found", "Workflow not found.")
   return null
 }
 
@@ -108,19 +108,63 @@ export function getWorkflowStudio(workspaceId: string, workflowId: string): Work
 export function validateWorkflowStudio(workspaceId: string, workflowId: string): WorkflowValidationResult | StoreFailure {
   const invalid = requireWorkflow(workspaceId, workflowId)
   if (invalid) return invalid
-  const workflow = getStoredWorkflow(workflowId)
+  const workflow = getStoredWorkflow(workflowId, workspaceId)
   if (!workflow) return failure(404, "not_found", "Workflow not found.")
   const issues = validateWorkflow(workflow.graph, referenceIndex(workspaceId))
   return { simulated: true, workspaceId, workflowId, ok: issues.length === 0, issues }
 }
 
 function graphFor(database: Database, workspaceId: string, workflowId: string, version: string): WorkflowGraph | StoreFailure {
-  const workflow = getStoredWorkflow(workflowId)
+  const workflow = getStoredWorkflow(workflowId, workspaceId)
   if (!workflow) return failure(404, "not_found", "Workflow not found.")
   if (!version || version === "draft") return structuredClone(workflow.graph)
   const snapshot = database.records[key(workspaceId, workflowId)]?.versions.find((item) => item.version === version)
   if (!snapshot) return failure(404, "not_found", "Published workflow version not found.")
   return structuredClone(snapshot.graph)
+}
+
+function commitSnapshot(
+  workspaceId: string,
+  workflowId: string,
+  version: string,
+  note: string,
+  graph: WorkflowGraph,
+): StoreFailure | null {
+  const database = readDatabase()
+  const current = database.records[key(workspaceId, workflowId)] ?? { publishedVersion: null, versions: [] }
+  if (current.versions.some((item) => item.version === version)) {
+    return failure(409, "invalid_job_transition", "That workflow version is already published and cannot be changed.")
+  }
+  current.versions = [
+    {
+      version,
+      publishedAt: SIMULATED_NOW,
+      note,
+      graph: structuredClone(graph),
+      immutable: true,
+    },
+    ...current.versions,
+  ]
+  current.publishedVersion = version
+  database.records[key(workspaceId, workflowId)] = current
+  writeDatabase(database)
+  return null
+}
+
+export function publishWorkflowRelease(
+  workflowId: string,
+  workspaceId: string,
+): { error: "missing" } | { error: "invalid"; issues: WorkflowIssue[] } | { error: "duplicate"; message: string } | { workflow: WorkflowRecord } {
+  const workflow = isWorkspaceId(workspaceId) ? getStoredWorkflow(workflowId, workspaceId) : null
+  if (!workflow) return { error: "missing" }
+  const issues = validateWorkflow(workflow.graph, referenceIndex(workspaceId))
+  if (issues.length > 0) return { error: "invalid", issues }
+  const versionNumber = workflow.version + 1
+  const committed = commitSnapshot(workspaceId, workflowId, String(versionNumber), "Published from the canvas.", workflow.graph)
+  if (committed) return { error: "duplicate", message: committed.message }
+  const updated = applyPublishedRelease(workflowId, workspaceId, versionNumber)
+  if (!updated) return { error: "missing" }
+  return { workflow: updated }
 }
 
 export function publishWorkflowStudio(workflowId: string, input: WorkflowPublishRequest): WorkflowStudioRecord | StoreFailure {
@@ -129,29 +173,14 @@ export function publishWorkflowStudio(workflowId: string, input: WorkflowPublish
   if (!/^\d+\.\d+\.\d+$/.test(input.version?.trim() ?? "")) return failure(400, "validation_error", "Use a version like 1.0.0.")
   const note = input.note?.trim() ?? ""
   if (note.length < 4 || note.length > 160) return failure(400, "validation_error", "Enter a publish note between 4 and 160 characters.")
-  const workflow = getStoredWorkflow(workflowId)
+  const workflow = getStoredWorkflow(workflowId, input.workspaceId)
   if (!workflow) return failure(404, "not_found", "Workflow not found.")
   const issues = validateWorkflow(workflow.graph, referenceIndex(input.workspaceId))
   if (issues.length > 0) return failure(400, "validation_error", issues[0]?.message ?? "This workflow is not ready to publish.")
-  const database = readDatabase()
-  const current = database.records[key(input.workspaceId, workflowId)] ?? { publishedVersion: null, versions: [] }
-  if (current.versions.some((version) => version.version === input.version.trim())) {
-    return failure(409, "invalid_job_transition", "That workflow version is already published and cannot be changed.")
-  }
-  current.versions = [
-    {
-      version: input.version.trim(),
-      publishedAt: SIMULATED_NOW,
-      note,
-      graph: structuredClone(workflow.graph),
-      immutable: true,
-    },
-    ...current.versions,
-  ]
-  current.publishedVersion = input.version.trim()
-  database.records[key(input.workspaceId, workflowId)] = current
-  writeDatabase(database)
-  return present(input.workspaceId, workflowId, database)
+  const committed = commitSnapshot(input.workspaceId, workflowId, input.version.trim(), note, workflow.graph)
+  if (committed) return committed
+  applyPublishedRelease(workflowId, input.workspaceId, workflow.version + 1)
+  return present(input.workspaceId, workflowId, readDatabase())
 }
 
 export function rollbackWorkflowStudio(workflowId: string, input: WorkflowRollbackRequest): WorkflowStudioRecord | StoreFailure {
@@ -161,7 +190,7 @@ export function rollbackWorkflowStudio(workflowId: string, input: WorkflowRollba
   const current = database.records[key(input.workspaceId, workflowId)]
   const source = current?.versions.find((version) => version.version === input.version)
   if (!current || !source) return failure(404, "not_found", "Published workflow version not found.")
-  updateStoredWorkflow(workflowId, { graph: structuredClone(source.graph), status: "draft" })
+  updateStoredWorkflow(workflowId, { graph: structuredClone(source.graph), status: "draft" }, input.workspaceId)
   return present(input.workspaceId, workflowId, database)
 }
 
@@ -219,6 +248,8 @@ export function decideWorkflowApproval(workflowId: string, executionId: string, 
     id: current.id,
     traceId: current.traceId,
     startedAt: current.startedAt,
+    attempt: current.attempt,
+    retryOf: current.retryOf,
     decisions,
     chunks: (knowledgeBaseId) => chunksFor(input.workspaceId, knowledgeBaseId),
     toolIds: refs.toolIds,
@@ -236,7 +267,8 @@ export function cancelWorkflowExecution(workflowId: string, executionId: string,
   const database = readDatabase()
   const current = database.executions.find((item) => item.id === executionId && item.workflowId === workflowId && item.workspaceId === workspaceId)
   if (!current) return failure(404, "not_found", "Execution not found.")
-  if (current.status === "completed" || current.status === "failed" || current.status === "cancelled") {
+  if (current.status === "cancelled") return structuredClone(current)
+  if (current.status === "completed" || current.status === "failed") {
     return failure(409, "invalid_job_transition", "This execution can no longer be cancelled.")
   }
   current.status = "cancelled"
@@ -247,6 +279,40 @@ export function cancelWorkflowExecution(workflowId: string, executionId: string,
   }
   writeDatabase(database)
   return structuredClone(current)
+}
+
+export function publishedWorkflowGraph(workspaceId: string, workflowId: string): WorkflowGraph | null {
+  const record = readDatabase().records[key(workspaceId, workflowId)]
+  if (!record?.publishedVersion) return null
+  const snapshot = record.versions.find((version) => version.version === record.publishedVersion)
+  return snapshot ? structuredClone(snapshot.graph) : null
+}
+
+export function listWorkspaceWorkflowExecutions(workspaceId: string): WorkflowExecutionRecord[] {
+  if (!isWorkspaceId(workspaceId)) return []
+  return readDatabase().executions.filter((item) => item.workspaceId === workspaceId)
+}
+
+export function getWorkflowExecution(workspaceId: string, executionId: string): WorkflowExecutionRecord | null {
+  return listWorkspaceWorkflowExecutions(workspaceId).find((item) => item.id === executionId) ?? null
+}
+
+export function retryWorkflowExecution(workspaceId: string, executionId: string): WorkflowExecutionRecord | StoreFailure {
+  const current = getWorkflowExecution(workspaceId, executionId)
+  if (!current) return failure(404, "not_found", "Execution not found.")
+  if (current.status !== "failed" && current.status !== "cancelled") {
+    return failure(409, "invalid_job_transition", "Retry is available after a failure or cancellation.")
+  }
+  const started = startWorkflowExecution(current.workflowId, { workspaceId, version: current.workflowVersion })
+  if ("ok" in started && started.ok === false) return started
+  const record = started as WorkflowExecutionRecord
+  const database = readDatabase()
+  const created = database.executions.find((item) => item.id === record.id && item.workspaceId === workspaceId)
+  if (!created) return record
+  created.attempt = (current.attempt ?? 1) + 1
+  created.retryOf = current.id
+  writeDatabase(database)
+  return structuredClone(created)
 }
 
 export function listWorkflowExecutions(workspaceId: string, workflowId: string): WorkflowExecutionList | StoreFailure {

@@ -58,7 +58,7 @@ List operations take `page` starting at 1. The response includes `page`, `pageSi
 | --- | --- | --- |
 | `agents.list` | 6 | `q`, `status` (`all\|active\|idle\|paused\|error`), `environment` (`all\|production\|staging\|sandbox`), `type` (`all\|planner\|researcher\|operator\|reviewer`), `sort` (`name\|updated\|success\|status`) |
 | `workflows.list` | 6 | `q`, `status` (`all\|draft\|published`), `page` |
-| `executions.list` | 8 | `q`, `agent` (id or `all`), `environment` (`all\|production\|staging\|sandbox`), `status` (`all\|queued\|running\|completed\|failed\|cancelled`), `range` (`all\|24h\|7d\|30d`), `sort` (`newest\|oldest\|duration\|status\|agent`) |
+| `executions.list` | 8 | `q`, `agent` (id or `all`), `environment` (`all\|production\|staging\|sandbox`), `status` (`all\|queued\|running\|waiting_for_approval\|completed\|failed\|cancelled`), `range` (`all\|24h\|7d\|30d`), `sort` (`newest\|oldest\|duration\|status\|agent`), `workspaceId` (defaults to `local`) |
 | `audit.list` | none; returns the filtered set | `q`, `actor` (`all` or a name), `resource` (`all` or a type), `outcome` (`all\|succeeded\|failed`), `range` (`all\|24h\|7d\|30d`) |
 | `operations.dashboard` | n/a | `environment` (`all\|production\|staging\|sandbox`), `range` (`24h\|7d\|30d`) |
 | `analytics.get` | n/a | same environment and range as the dashboard |
@@ -201,11 +201,13 @@ No body. Response `201`: `{ "run": WorkflowRun }`. The run is a simulated plan (
 
 ## Executions
 
+Unified listing, traces, logs, and retry linkage are documented in `docs/api-contracts/execution-service-integration.md`.
+
 ### `executions.list` `GET /api/executions`
 
 Response `200`: `{ "executions": ExecutionSummary[], "agents": { "id", "name" }[], "page", "pageSize", "total", "asOf", "simulated": true }`
 
-Summary status is the observatory status: `queued|running|completed|failed|cancelled`.
+Summary status is the observatory status: `queued|running|waiting_for_approval|completed|failed|cancelled`. Historical rows without a recorded version use `versionLabel: null` and the UI shows Unknown.
 
 ### `executions.get` `GET /api/executions/:id`
 

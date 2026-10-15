@@ -30,7 +30,7 @@ The workflow canvas keeps the existing editor, graph, and integer publish route.
 | `workflows.executions.approval` | `POST /api/workflows/:id/executions/:executionId/approval?workspaceId=` | `200` resumed record |
 | `workflows.executions.cancel` | `POST /api/workflows/:id/executions/:executionId/cancel?workspaceId=` | `200` cancelled record |
 
-The existing `workflows.publish` and `workflows.run` routes stay in place. They still update the integer catalog version and the short simulated plan. They do not write studio snapshots.
+`workflows.publish` and `workflows.studio.publish` both commit an immutable snapshot through the same operation. A published workflow points at that snapshot. `workflows.run` executes the published snapshot when one exists. A duplicate version is rejected, and a published snapshot is not edited when the draft changes.
 
 The body `workspaceId` must equal the query. A mismatch is `400` `validation_error` with `Workspace scope does not match.`
 

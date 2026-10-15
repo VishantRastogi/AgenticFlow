@@ -13,6 +13,8 @@ export type WorkflowSimulationInput = {
   toolIds: string[]
   publishedAgents: { id: string; versions: string[] }[]
   requirePublishedAgents: boolean
+  attempt?: number
+  retryOf?: string | null
 }
 
 const tokensFor: Record<string, number> = {
@@ -85,6 +87,8 @@ export function simulateWorkflow(graph: WorkflowGraph, input: WorkflowSimulation
     estimatedCostUsd: Math.round((totalTokens / 1000) * 0.002 * 1_000_000) / 1_000_000,
     pendingApproval: pending,
     notice: "Simulated workflow execution. No model, tool, or retrieval service was called.",
+    attempt: input.attempt ?? 1,
+    retryOf: input.retryOf ?? null,
   }
 }
 

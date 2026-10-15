@@ -178,6 +178,32 @@ export function listAgentTestRuns(workspaceId: string, agentId: string): AgentTe
   return { simulated: true, workspaceId, agentId, runs }
 }
 
+export function listAllAgentTestRuns(workspaceId: string): AgentTestRunRecord[] {
+  if (!isWorkspaceId(workspaceId)) return []
+  return readDatabase().runs.filter((run) => run.workspaceId === workspaceId)
+}
+
+export function retryAgentTestRun(workspaceId: string, runId: string): AgentTestRunRecord | StoreFailure {
+  const current = readDatabase().runs.find((run) => run.runId === runId && run.workspaceId === workspaceId)
+  if (!current) return failure(404, "not_found", "Execution not found.")
+  if (current.status !== "failed" && current.status !== "limited") {
+    return failure(409, "invalid_job_transition", "Retry is available after a failure or cancellation.")
+  }
+  if (!current.input) return failure(409, "invalid_job_transition", "This execution did not record an input to retry.")
+  const result = testAgentStudio(current.agentId, {
+    workspaceId,
+    version: current.agentVersion === "unknown" ? "draft" : current.agentVersion,
+    input: current.input,
+    attempt: (current.attempt ?? 1) + 1,
+    retryOf: current.runId,
+  })
+  if ("ok" in result && result.ok === false) return result
+  const response = result as AgentTestResponse
+  const created = readDatabase().runs.find((run) => run.runId === response.requestId && run.workspaceId === workspaceId)
+  if (!created) return failure(404, "not_found", "Execution not found.")
+  return structuredClone(created)
+}
+
 function configurationFor(record: Database["records"][string] | undefined, version: string): AgentConfiguration | StoreFailure {
   if (!version || version === "draft") return record?.draft ?? defaultAgentConfiguration()
   const published = record?.versions.find((item) => item.version === version)
@@ -213,6 +239,14 @@ export function testAgentStudio(agentId: string, input: AgentTestRequest): Agent
     startedAt: SIMULATED_NOW,
     durationMs: result.latencyMs,
     simulated: true,
+    input: input.input.trim(),
+    attempt: input.attempt ?? 1,
+    retryOf: input.retryOf ?? null,
+    usage: result.usage,
+    estimatedCostUsd: result.estimatedCostUsd,
+    provider: configuration.model.provider,
+    model: configuration.model.model,
+    error: result.error,
   }
   databaseAfter.runs = [run, ...(databaseAfter.runs ?? [])]
   writeDatabase(databaseAfter)

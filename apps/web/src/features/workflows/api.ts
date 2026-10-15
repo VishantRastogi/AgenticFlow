@@ -23,8 +23,11 @@ export function listWorkflows(params: WorkflowListParams) {
   })
 }
 
-export function getWorkflow(id: string) {
-  return callContract<{ workflow: WorkflowRecord; simulated: true }>("workflows.get", { params: { id } })
+export function getWorkflow(id: string, workspaceId?: string) {
+  return callContract<{ workflow: WorkflowRecord; simulated: true }>("workflows.get", {
+    params: { id },
+    ...(workspaceId ? { query: { workspaceId } } : {}),
+  })
 }
 
 export function createWorkflow(input: WorkflowWriteInput) {

@@ -65,6 +65,8 @@ export type WorkflowExecutionRecord = {
   estimatedCostUsd: number
   pendingApproval: { nodeId: string; role: string; message: string } | null
   notice: string
+  attempt: number
+  retryOf: string | null
 }
 
 export type WorkflowExecutionRequest = {

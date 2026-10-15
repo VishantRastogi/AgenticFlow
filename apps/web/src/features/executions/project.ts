@@ -47,6 +47,13 @@ export function projectExecution(input: ExecutionProjectionInput): ExecutionDeta
     retryOf,
     progress: progressFor(input.record.status, cursor),
     simulated: true,
+    source: "catalog",
+    versionLabel: input.record.agentVersion ?? null,
+    traceId: null,
+    workspaceId: "local",
+    tokenCount: null,
+    estimatedCostUsd: null,
+    model: null,
   }
 
   return {

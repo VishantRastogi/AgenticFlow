@@ -1,6 +1,7 @@
 import type { ExecutionStatus, RetryPolicy, RuntimeEnvironment } from "@/features/dashboard/types"
 
-export type ObservatoryStatus = "queued" | "running" | "completed" | "failed" | "cancelled"
+export type ObservatoryStatus = "queued" | "running" | "waiting_for_approval" | "completed" | "failed" | "cancelled"
+export type ExecutionSource = "catalog" | "agent_test" | "workflow" | "workflow_plan"
 export type StepState = "pending" | "running" | "completed" | "failed" | "skipped"
 export type LogSeverity = "debug" | "info" | "warn" | "error"
 export type ExecutionSort = "newest" | "oldest" | "duration" | "status" | "agent"
@@ -33,16 +34,25 @@ export type ExecutionSummary = {
   retryOf: string | null
   progress: number
   simulated: true
+  source?: ExecutionSource
+  /** Recorded published version. Null when the run did not store one. */
+  versionLabel?: string | null
+  traceId?: string | null
+  workspaceId?: string
+  tokenCount?: number | null
+  estimatedCostUsd?: number | null
+  model?: string | null
+  workflowId?: string | null
 }
 
 export type ExecutionDetail = ExecutionSummary & {
   finishedAt: string | null
-  workflowId: null
+  workflowId: string | null
   input: {
     agentId: string
     environment: RuntimeEnvironment
     attempt: number
-    source: "schedule" | "agent-studio" | "retry"
+    source: "schedule" | "agent-studio" | "retry" | "workflow" | "workflow-plan"
   }
   output: { summary: string; attempt: number } | null
   error: { message: string; step: string } | null
