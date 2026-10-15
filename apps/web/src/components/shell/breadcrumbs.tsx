@@ -5,9 +5,9 @@ import { moduleList } from "@/lib/modules"
 
 export function Breadcrumbs() {
   const pathname = usePathname()
-  const current = moduleList().find(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-  )
+  const current = moduleList()
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .sort((left, right) => right.href.length - left.href.length)[0]
 
   return (
     <nav aria-label="Breadcrumb" className="min-w-0">

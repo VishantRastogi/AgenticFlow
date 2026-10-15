@@ -316,5 +316,22 @@ Body: `{ "name": string, "secret": string }` with secret length at least 8. Resp
 | `agentflow-mock-deployments` | Release overlay |
 | `agentflow-mock-audit` | Audit overlay |
 | `agentflow-mock-settings` | Organization, preferences, members, integrations |
+| `agentflow-mock-playground` | Playground conversations and presets |
+
+## Playground
+
+These routes are the simulated model gateway used by `/playground`. Assistant messages include `simulated: true`. They are not live provider output.
+
+| Operation | Method and path | Notes |
+| --- | --- | --- |
+| `playground.catalog` | `GET /api/playground/catalog` | Models and saved presets. |
+| `playground.conversations.list` | `GET /api/playground/conversations` | Newest first. |
+| `playground.conversations.get` | `GET /api/playground/conversations/:id` | |
+| `playground.conversations.create` | `POST /api/playground/conversations` | Body is model settings plus optional `title`. |
+| `playground.conversations.delete` | `DELETE /api/playground/conversations/:id` | `204`. |
+| `playground.presets.save` | `POST /api/playground/presets` | Name of at least 2 characters. |
+| `playground.generate` | `POST /api/playground/generations` | Not idempotent. A message containing `rate limit` returns `429` `rate_limited`. A message containing `fail this run` returns `502`. |
+| `playground.cancel` | `POST /api/playground/generations/:id/cancel` | Body `{ "content": string }` saves a stopped assistant message. |
+| `playground.stream` | `GET /api/playground/generations/:id/events` | `text/event-stream` with `tool`, `citation`, `token`, and `done` events. Real mode fails with `api_unavailable` when the stream is missing. |
 
 A real service stores these on the server. The browser keys are a development mock and are not an API.

@@ -83,3 +83,71 @@ export async function callContract<T>(id: ApiOperationId, request: ContractReque
     token: operation.auth === "bearer" ? readAuthToken() : null,
   })
 }
+
+export async function openContractStream(
+  id: ApiOperationId,
+  request: ContractRequest = {},
+  signal?: AbortSignal,
+): Promise<Response> {
+  const operation = apiOperations[id]
+  const mode = getApiMode()
+
+  if (operation.scope === "unimplemented") {
+    throw new ApiError(operation.unavailable, "api_unavailable", 0)
+  }
+
+  if (operation.transport !== "sse") {
+    throw new ApiError(`${id} is not an event stream.`, "validation_error", 0)
+  }
+
+  if (mode === "mock" && process.env.NODE_ENV === "production") {
+    throw new ApiError(
+      "Mock operations are available in development only. The real API was not called.",
+      "api_unavailable",
+      0,
+    )
+  }
+
+  const path = resolveContractPath(operation.path, request.params)
+  const unavailable =
+    mode === "real"
+      ? `The real API has no implementation for ${id} (${operation.method} ${operation.path}). Mock mode was not used.`
+      : operation.unavailable
+  const base = mode === "real" ? realBaseUrl(unavailable) : mockBaseUrl()
+  const token = operation.auth === "bearer" ? readAuthToken() : null
+
+  let response: Response
+  try {
+    response = await fetch(`${base}${path}`, {
+      method: operation.method,
+      cache: "no-store",
+      signal,
+      headers: {
+        accept: "text/event-stream",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    })
+  } catch (error) {
+    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+      throw error
+    }
+    throw new ApiError(mode === "real" ? unavailable : operation.network, mode === "real" ? "api_unavailable" : "network", 0)
+  }
+
+  if (!response.ok || !response.body) {
+    if (mode === "mock") {
+      const text = await response.text()
+      try {
+        const payload = JSON.parse(text) as { code?: unknown; message?: unknown }
+        if (typeof payload.message === "string" && typeof payload.code === "string") {
+          throw new ApiError(payload.message, payload.code as ApiError["code"], response.status)
+        }
+      } catch (error) {
+        if (error instanceof ApiError) throw error
+      }
+    }
+    throw new ApiError(unavailable, "api_unavailable", response.status)
+  }
+
+  return response
+}

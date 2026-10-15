@@ -13,7 +13,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { moduleList } from "@/lib/modules"
+import { moduleSections, modules } from "@/lib/modules"
 import { useUiStore } from "@/stores/ui-store"
 
 export function SearchCommand() {
@@ -66,21 +66,24 @@ export function SearchCommand() {
         <CommandInput placeholder="Search views and commands" />
         <CommandList>
           <CommandEmpty>No matching commands.</CommandEmpty>
-          <CommandGroup heading="Navigate">
-            {moduleList().map((item) => {
-              const Icon = item.icon
-              return (
-                <CommandItem
-                  key={item.href}
-                  value={`${item.title} ${item.keywords}`}
-                  onSelect={() => go(item.href)}
-                >
-                  <Icon aria-hidden="true" />
-                  {item.title}
-                </CommandItem>
-              )
-            })}
-          </CommandGroup>
+          {moduleSections.map((section) => (
+            <CommandGroup key={section.id} heading={section.title}>
+              {section.keys.map((key) => {
+                const item = modules[key]
+                const Icon = item.icon
+                return (
+                  <CommandItem
+                    key={item.href}
+                    value={`${item.title} ${item.keywords}`}
+                    onSelect={() => go(item.href)}
+                  >
+                    <Icon aria-hidden="true" />
+                    {item.title}
+                  </CommandItem>
+                )
+              })}
+            </CommandGroup>
+          ))}
           <CommandSeparator />
           <CommandGroup heading="Appearance">
             <CommandItem value="theme light" onSelect={() => { setTheme("light"); setOpen(false) }}>

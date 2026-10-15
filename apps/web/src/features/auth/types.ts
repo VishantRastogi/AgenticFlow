@@ -53,6 +53,7 @@ export type ApiErrorCode =
   | "unauthenticated"
   | "invalid_reset_token"
   | "validation_error"
+  | "rate_limited"
   | "network"
   | "api_unavailable"
   | "unknown"

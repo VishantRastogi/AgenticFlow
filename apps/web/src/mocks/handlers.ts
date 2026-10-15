@@ -19,6 +19,7 @@ import { auditActor, recordAudit } from "@/mocks/audit-store"
 import { auditHandlers } from "@/mocks/audit-handlers"
 import { deploymentHandlers } from "@/mocks/deployment-handlers"
 import { executionHandlers } from "@/mocks/execution-handlers"
+import { playgroundHandlers } from "@/mocks/playground-handlers"
 import { settingsHandlers } from "@/mocks/settings-handlers"
 import { workflowHandlers } from "@/mocks/workflow-handlers"
 import {
@@ -337,6 +338,7 @@ export const handlers = [
   ...deploymentHandlers,
   ...auditHandlers,
   ...settingsHandlers,
+  ...playgroundHandlers,
 ]
 
 const agentTypes = new Set<AgentType>(["planner", "researcher", "operator", "reviewer"])

@@ -25,11 +25,15 @@ const screens = [
 describe("route navigation", () => {
   it("registers every mission control destination", () => {
     expect(moduleList().map((item) => item.href)).toEqual([
-      "/dashboard",
       "/overview",
+      "/dashboard",
       "/agents",
+      "/playground",
+      "/knowledge-bases",
+      "/rag-studio",
       "/workflows",
       "/executions",
+      "/evaluations",
       "/analytics",
       "/deployments",
       "/audit-logs",

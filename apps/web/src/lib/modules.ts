@@ -3,11 +3,15 @@ import {
   Activity,
   Bot,
   ChartColumn,
+  Database,
+  FlaskConical,
   GitBranch,
   LayoutDashboard,
+  Library,
   Rocket,
   ScrollText,
   Settings,
+  Sparkles,
   Waypoints,
 } from "lucide-react"
 
@@ -15,12 +19,18 @@ export type ModuleKey =
   | "dashboard"
   | "overview"
   | "agents"
+  | "playground"
+  | "knowledge-bases"
+  | "rag-studio"
   | "workflows"
   | "executions"
+  | "evaluations"
   | "analytics"
   | "deployments"
   | "audit-logs"
   | "settings"
+
+export type ModuleSectionId = "workspace" | "intelligence" | "operations" | "administration"
 
 export type ModuleDefinition = {
   key: ModuleKey
@@ -74,6 +84,36 @@ export const modules: Record<ModuleKey, ModuleDefinition> = {
     icon: Bot,
     keywords: "bots workers assistants studio",
   },
+  playground: {
+    key: "playground",
+    href: "/playground",
+    title: "AI Playground",
+    description: "Try prompts against the simulated model gateway. Responses are not live provider output.",
+    icon: Sparkles,
+    keywords: "chat prompt model streaming playground",
+  },
+  "knowledge-bases": {
+    key: "knowledge-bases",
+    href: "/knowledge-bases",
+    title: "Knowledge Bases",
+    description: "Document collections for retrieval will be managed here.",
+    icon: Library,
+    keywords: "documents ingestion embeddings knowledge",
+    emptyTitle: "Knowledge bases are not connected",
+    emptyDescription:
+      "This workspace has no knowledge base records yet. Creating and ingesting documents waits for the knowledge API.",
+  },
+  "rag-studio": {
+    key: "rag-studio",
+    href: "/rag-studio",
+    title: "RAG Studio",
+    description: "Retrieval experiments will run against a knowledge base.",
+    icon: Database,
+    keywords: "retrieval search chunks rag",
+    emptyTitle: "Retrieval studio is not connected",
+    emptyDescription:
+      "Ranked chunks and grounded answers appear here after the retrieval API is connected. No scores are invented on this screen.",
+  },
   workflows: {
     key: "workflows",
     href: "/workflows",
@@ -89,6 +129,17 @@ export const modules: Record<ModuleKey, ModuleDefinition> = {
     description: "Search run history, logs, and simulated job progress.",
     icon: Waypoints,
     keywords: "runs jobs history logs",
+  },
+  evaluations: {
+    key: "evaluations",
+    href: "/evaluations",
+    title: "Evaluations",
+    description: "Dataset runs and simulated quality scores will be compared here.",
+    icon: FlaskConical,
+    keywords: "eval tests groundedness quality",
+    emptyTitle: "Evaluations are not connected",
+    emptyDescription:
+      "Test cases and score history stay empty until the evaluation API is connected. This screen does not invent pass or fail results.",
   },
   analytics: {
     key: "analytics",
@@ -124,17 +175,18 @@ export const modules: Record<ModuleKey, ModuleDefinition> = {
   },
 }
 
-export const moduleOrder = [
-  "dashboard",
-  "overview",
-  "agents",
-  "workflows",
-  "executions",
-  "analytics",
-  "deployments",
-  "audit-logs",
-  "settings",
-] as const satisfies readonly ModuleKey[]
+export const moduleSections: readonly {
+  id: ModuleSectionId
+  title: string
+  keys: readonly ModuleKey[]
+}[] = [
+  { id: "workspace", title: "Workspace", keys: ["overview", "dashboard", "agents"] },
+  { id: "intelligence", title: "AI Intelligence", keys: ["playground", "knowledge-bases", "rag-studio"] },
+  { id: "operations", title: "Operations", keys: ["workflows", "executions", "evaluations", "analytics", "deployments"] },
+  { id: "administration", title: "Administration", keys: ["audit-logs", "settings"] },
+]
+
+export const moduleOrder = moduleSections.flatMap((section) => section.keys)
 
 export function moduleList() {
   return moduleOrder.map((key) => modules[key])
