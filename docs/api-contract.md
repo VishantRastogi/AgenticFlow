@@ -30,6 +30,14 @@ Operation ids below are the adapter names. Paths are REST.
 | `session_expired` | 401 | Bearer token was valid and has expired. |
 | `invalid_reset_token` | 400 | Reset token missing, used, or expired. |
 | `validation_error` | 400 | Body or query failed validation. |
+| `invalid_file_type` | 415 | The file extension or media type is not accepted. |
+| `file_too_large` | 413 | The file is larger than the service limit. |
+| `duplicate_name` | 409 | A knowledge base with that name already exists in the workspace. |
+| `not_found` | 404 | The resource is missing in the caller's workspace. The body does not say whether it exists elsewhere. |
+| `forbidden` | 403 | The caller is authenticated but is not allowed to perform the operation. Cross-workspace reads use `not_found` instead. |
+| `invalid_job_transition` | 409 | Retry, cancel, or reindex is not legal for the current attempt. |
+| `processing_failed` | 502, or on the job | The pipeline or a simulated upload failed. A failed ingestion job keeps this code and stays readable. |
+| `rate_limited` | 429 | The service refused the call until the client waits. |
 | `network` | 0 | Mock-mode transport failure. |
 | `api_unavailable` | 0, 404, 405, 5xx | Real endpoint missing, origin unset, or transport failed. Mock was not used. |
 | `unknown` | varies | Fallback when the body is an error but the code is not one of the above. The mock hint uses this when no seed account exists. |
@@ -54,6 +62,9 @@ List operations take `page` starting at 1. The response includes `page`, `pageSi
 | `audit.list` | none; returns the filtered set | `q`, `actor` (`all` or a name), `resource` (`all` or a type), `outcome` (`all\|succeeded\|failed`), `range` (`all\|24h\|7d\|30d`) |
 | `operations.dashboard` | n/a | `environment` (`all\|production\|staging\|sandbox`), `range` (`24h\|7d\|30d`) |
 | `analytics.get` | n/a | same environment and range as the dashboard |
+| `knowledge.bases.list` | 6 | `workspaceId`, `q`, `status` (`all\|empty\|processing\|ready\|attention`), `model` (`all\|orbit-embed-small\|orbit-embed-large`), `sort` (`updated\|name\|documents\|storage`), `page` |
+| `knowledge.documents.list` | 8 | `workspaceId`, `q`, `status` (`all` or an ingestion stage), `page` |
+| `rag` | n/a | `workspaceId` on every retrieval route. Filters travel in the retrieval body. |
 
 Date windows are compared with the service clock. The mock clock is `2026-10-14T04:30:00.000Z`, not the browser clock.
 
@@ -317,6 +328,8 @@ Body: `{ "name": string, "secret": string }` with secret length at least 8. Resp
 | `agentflow-mock-audit` | Audit overlay |
 | `agentflow-mock-settings` | Organization, preferences, members, integrations |
 | `agentflow-mock-playground` | Playground conversations and presets |
+| `agentflow-mock-knowledge` | Knowledge bases, documents, ingestion jobs, and chunks |
+| `agentflow-mock-rag` | Last RAG Studio configuration per workspace |
 
 ## Playground
 
@@ -335,3 +348,105 @@ These routes are the simulated model gateway used by `/playground`. Assistant me
 | `playground.stream` | `GET /api/playground/generations/:id/events` | `text/event-stream` with `tool`, `citation`, `token`, and `done` events. Real mode fails with `api_unavailable` when the stream is missing. |
 
 A real service stores these on the server. The browser keys are a development mock and are not an API.
+
+## Knowledge bases
+
+These routes back `/knowledge-bases`. Every record is scoped by `workspaceId`. The UI sends the local workspace id `local`. `workspaceId` selects a scope. It is not an authorization credential. A future service must resolve the caller's workspace membership from the bearer token. A missing membership is `401` `unauthenticated` or `403` `forbidden`. A read or write for an id outside the caller's workspace is `404` `not_found` with the same message as a missing id (`Knowledge base not found.`, `Document not found.`, or `Ingestion job not found.`). The body does not reveal that the record exists in another workspace.
+
+The response always includes `simulated: true` in the mock. Text, chunks, and embeddings are produced by the mock ingestion service. They are not parsed from file bytes and no vectors are computed.
+
+`workspaceId` is required on every route as a query parameter. It must match `^[a-z0-9][a-z0-9_-]{0,63}$`. Create and upload also send `workspaceId` in the body, and it must equal the query. A mismatch is `400` `validation_error` with `Workspace scope does not match.`
+
+Pagination matches the rest of the contract: `page` starts at 1, and the body includes `page`, `pageSize`, and `total`. `total` counts the filtered set. A page past the end returns an empty `items` array. Knowledge bases use page size 6. Documents use page size 8.
+
+### Types
+
+`KnowledgeBaseSettings`: `{ "embeddingModel": "orbit-embed-small"|"orbit-embed-large", "chunkSize": number, "chunkOverlap": number, "retrieval": { "topK": number, "scoreThreshold": number }, "metadataSchema": Record<string, "string"|"number"|"boolean"> }`
+
+`KnowledgeBase`: settings plus `id`, `workspaceId`, `name`, `description`, `documentCount`, `storageBytes`, `ingestionStatus` (`empty|processing|ready|attention`), `reindexRequired`, `createdAt`, `updatedAt`, `simulated`. `documentCount` and `storageBytes` are derived from the documents in that workspace. They are not stored separately. `reindexRequired` is true when chunk size, overlap, or the embedding model differ from the settings that last reached `READY`.
+
+`KnowledgeBaseCreateRequest`: `{ "workspaceId", "name", "description", "settings" }`
+
+`KnowledgeBaseUpdateRequest`: `{ "name", "description", "settings" }`
+
+`KnowledgeBaseListResponse`: `{ "simulated": true, "workspaceId", "page", "pageSize", "total", "items": KnowledgeBase[] }`
+
+`DocumentRecord`: `{ "id", "workspaceId", "knowledgeBaseId", "jobId", "name", "extension": "pdf"|"docx"|"txt"|"md", "mediaType", "sizeBytes", "status", "progress", "attempt", "error", "extractedText", "metadata", "createdAt", "updatedAt", "simulated" }`
+
+`DocumentUploadRequest`: `{ "workspaceId", "name", "mediaType", "sizeBytes" }`
+
+`DocumentUploadResponse`: `{ "simulated": true, "document", "job" }`
+
+`IngestionJob`: `{ "id", "workspaceId", "knowledgeBaseId", "documentId", "attempt", "stage", "failedStage", "progress", "durationMs", "error", "errorCode", "cancelled", "startedAt", "updatedAt", "simulated" }`. `id` is immutable. `attempt` starts at 1. `errorCode` is `processing_failed` or null. Cancel keeps `errorCode` null.
+
+`IngestionStage`: `UPLOADED | QUEUED | PARSING | CHUNKING | EMBEDDING | INDEXING | READY | FAILED`
+
+`DocumentChunk`: `{ "id", "documentId", "index", "content", "tokenCount", "startOffset", "endOffset", "metadata", "simulated" }`. Offsets are character positions in the simulated extract.
+
+`PaginatedResponse<T>`: `{ "page", "pageSize", "total", "items": T[] }`
+
+Errors use the shared body `{ "code", "message" }`. Duplicate names use `409` `duplicate_name`. An unsupported type uses `415` `invalid_file_type`. A file over 5 MB uses `413` `file_too_large`. Missing or cross-workspace records use `404` `not_found`. Illegal retry, cancel, or reindex uses `409` `invalid_job_transition`. A rejected simulated upload and a failed pipeline use `processing_failed`. A name containing `rate-limit` uses `429` `rate_limited` before a row is written. `forbidden` is reserved for a member who may see the workspace but may not perform the operation. The mock does not assign roles.
+
+### Validation
+
+Name is required, trimmed, 2 to 80 characters, and unique in the workspace without regard to case. Description may be empty and is at most 500 characters. Chunk size is an integer from 128 to 2048. Chunk overlap is an integer greater than or equal to 0 and strictly less than the chunk size. Top K is an integer from 1 to 20. Score threshold is a number from 0 to 1. The embedding model must be one of the two simulated models. Metadata schema is a JSON object of at most 12 keys. Keys match `^[a-z][a-z0-9_]{0,31}$`. Values are `string`, `number`, or `boolean`.
+
+Files must use `.pdf`, `.docx`, `.txt`, or `.md`. Empty files and files larger than 5 MB are rejected. The upload body carries the name, media type, and size. File bytes are not stored. A name containing `fail-upload` is rejected with `502` `processing_failed` before a document row is written.
+
+The browser checks type and size before the request so the user gets immediate feedback. That check is not authoritative. The service repeats it and returns `invalid_file_type`, `file_too_large`, or `validation_error`. A client that skips its own check still cannot store a bad file.
+
+### Production upload sequence
+
+The working mock route `knowledge.documents.upload` collapses the sequence below and returns `session.status = "completed"` with `uploadUrl: null`. It does not send bytes to object storage.
+
+Production clients will use this sequence instead. The session routes are in the catalog as `unimplemented`, so real mode fails closed and the current UI does not call them.
+
+1. `POST /api/knowledge-bases/:id/uploads` creates an upload session after authoritative type and size checks.
+2. The client uploads the bytes with `PUT` to the returned `uploadUrl`. That URL is an authorized gateway or a presigned object-storage URL. It is not a knowledge-base route.
+3. `POST /api/knowledge-bases/:id/uploads/:uploadId/complete` marks the object stored.
+4. Completion creates the document and the first ingestion job at `UPLOADED`.
+5. The client polls `GET` document and knowledge-base routes, or a future event stream, for job progress.
+
+`workspaceId` on the session must match the authenticated membership. The presigned URL must be bound to that session and must expire.
+
+### Operations
+
+| Operation | Method and path | Idempotent | Success |
+| --- | --- | --- | --- |
+| `knowledge.bases.list` | `GET /api/knowledge-bases` | Yes | `200` list |
+| `knowledge.bases.get` | `GET /api/knowledge-bases/:id` | Yes | `200` `{ "simulated", "knowledgeBase", "activeJobs" }` |
+| `knowledge.bases.create` | `POST /api/knowledge-bases` | No | `201` `{ "simulated", "knowledgeBase" }` |
+| `knowledge.bases.update` | `PATCH /api/knowledge-bases/:id` | Yes | `200` `{ "simulated", "knowledgeBase" }` |
+| `knowledge.bases.delete` | `DELETE /api/knowledge-bases/:id` | Yes | `204`. Deletes documents, jobs, and chunks for that base. |
+| `knowledge.documents.list` | `GET /api/knowledge-bases/:id/documents` | Yes | `200` list |
+| `knowledge.documents.get` | `GET /api/knowledge-bases/:id/documents/:documentId` | Yes | `200` `{ "simulated", "document", "job", "jobs", "chunks" }` |
+| `knowledge.documents.upload` | `POST /api/knowledge-bases/:id/documents` | No | `201` upload response. Status starts at `UPLOADED`. |
+| `knowledge.documents.delete` | `DELETE /api/knowledge-bases/:id/documents/:documentId` | Yes | `204`. Deletes jobs and chunks for that document. |
+| `knowledge.documents.retry` | `POST /api/knowledge-bases/:id/documents/:documentId/retry` | No | `201`. Only a `FAILED` document can be retried. The new job id is a new attempt. |
+| `knowledge.bases.reindex` | `POST /api/knowledge-bases/:id/reindex` | No | `200` `{ "simulated", "jobs" }`. One new `QUEUED` attempt per terminal document. |
+| `knowledge.jobs.cancel` | `POST /api/knowledge-bases/:id/jobs/:jobId/cancel` | Yes | `200`. A second cancel of a cancelled job returns the same row. Cancelling a finished job is `409` `invalid_job_transition`. |
+| `knowledge.chunks.list` | `GET /api/knowledge-bases/:id/documents/:documentId/chunks` | Yes | `200` `{ "simulated", "chunks" }` |
+| `knowledge.uploads.create` | `POST /api/knowledge-bases/:id/uploads` | No | Unimplemented. Real mode fails before fetch. |
+| `knowledge.uploads.complete` | `POST /api/knowledge-bases/:id/uploads/:uploadId/complete` | Yes | Unimplemented. Real mode fails before fetch. |
+
+There is no `jobs.tick` route. The UI only reads job state and sends retry, cancel, and reindex. In the mock, a worker inside the store advances each current attempt by one stage about every 700 ms and writes that state before the next read. The page polls `GET` every 700 ms while a job is non-terminal and clears the timer on unmount. Tests do not start the worker; they call the store helper `advanceIngestionJob`. A Python worker can own the same stage updates later without a UI change.
+
+`activeJobs` lists non-terminal jobs for the whole knowledge base, including jobs whose documents are on another page. `READY` and `FAILED` are the only terminal stages. A document has one current attempt (`document.jobId`). Older attempt rows stay. Retry and reindex refuse with `invalid_job_transition` while any current attempt is non-terminal, so two attempts cannot run for the same document. Reindex also refuses when the base has no documents or when any document is still running. It clears extracted text and chunks, then starts `attempt + 1` at `QUEUED`. Changing chunk size, overlap, or the embedding model sets `reindexRequired` and does not rebuild chunks by itself.
+
+### Ingestion transitions
+
+`UPLOADED → QUEUED → PARSING → CHUNKING → EMBEDDING → INDEXING → READY`
+
+Each completed step adds a fixed simulated duration: 200, 300, 400, 500, 400, then 300 ms. The budget is 2100 ms. `progress` is 0 at `UPLOADED` and 100 at `READY`.
+
+Extracted text is written when the job enters `PARSING`. It always says the text was not parsed from the file. Chunks are written when the job enters `CHUNKING` and say embeddings were not computed. A retry clears extracted text and chunks, then starts a new job at `QUEUED` with `attempt + 1`. The previous job row is kept.
+
+A file whose name contains `fail-parse` fails as it would enter `PARSING`. A file whose name contains `fail-once` fails as it would enter `EMBEDDING` on attempt 1 and can reach `READY` on attempt 2. Cancel sets `FAILED`, `cancelled: true`, and the error `Ingestion was cancelled. No embedding was written.`
+
+`ingestionStatus` on the knowledge base is `empty` with no documents, `processing` while any document is not terminal, `attention` when any document failed and none are still running, and `ready` when every document is `READY`.
+
+Changing chunk settings does not rebuild chunks that already exist. The new window applies to later ingestion and to an explicit reindex.
+
+### Backend handoff
+
+A Node.js GraphQL gateway can expose these REST operations without changing the UI paths. A Python ingestion service owns parsing, chunking, and embeddings. It should accept the same stage names, return `simulated: false` when a real model ran, and keep workspace isolation on every read and write. The browser storage key is not part of that API. Real mode already fails closed when these routes are missing. Retrieval experiments are documented in `docs/api-contracts/rag-service-integration.md`.

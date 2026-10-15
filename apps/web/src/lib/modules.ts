@@ -96,23 +96,17 @@ export const modules: Record<ModuleKey, ModuleDefinition> = {
     key: "knowledge-bases",
     href: "/knowledge-bases",
     title: "Knowledge Bases",
-    description: "Document collections for retrieval will be managed here.",
+    description: "Manage document collections and simulated ingestion for this workspace.",
     icon: Library,
     keywords: "documents ingestion embeddings knowledge",
-    emptyTitle: "Knowledge bases are not connected",
-    emptyDescription:
-      "This workspace has no knowledge base records yet. Creating and ingesting documents waits for the knowledge API.",
   },
   "rag-studio": {
     key: "rag-studio",
     href: "/rag-studio",
     title: "RAG Studio",
-    description: "Retrieval experiments will run against a knowledge base.",
+    description: "Run simulated retrieval experiments against knowledge bases in this workspace.",
     icon: Database,
     keywords: "retrieval search chunks rag",
-    emptyTitle: "Retrieval studio is not connected",
-    emptyDescription:
-      "Ranked chunks and grounded answers appear here after the retrieval API is connected. No scores are invented on this screen.",
   },
   workflows: {
     key: "workflows",

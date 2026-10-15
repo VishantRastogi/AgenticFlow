@@ -1,29 +1,40 @@
 import { useState } from "react"
 
-const stages = ["Uploaded", "Parsing", "Chunking", "Embedding", "Indexing", "Ready"] as const
+const stages = ["UPLOADED", "QUEUED", "PARSING", "CHUNKING", "EMBEDDING", "INDEXING", "READY"] as const
+
+const stageLabels: Record<(typeof stages)[number] | "FAILED", string> = {
+  UPLOADED: "Uploaded",
+  QUEUED: "Queued",
+  PARSING: "Parsing",
+  CHUNKING: "Chunking",
+  EMBEDDING: "Embedding",
+  INDEXING: "Indexing",
+  READY: "Ready",
+  FAILED: "Failed",
+}
 
 export function DocumentUploadZone({
   onFiles,
   disabled = false,
+  note = "Files stay local until an ingestion API accepts them.",
 }: {
   onFiles: (files: File[]) => void
   disabled?: boolean
+  note?: string
 }) {
   const [error, setError] = useState<string | null>(null)
 
   const accept = (list: FileList | null) => {
     const files = [...(list ?? [])]
     const invalid = files.find((file) => file.size > 5_000_000)
-    if (invalid) {
-      setError(`${invalid.name} is larger than 5 MB.`)
-      return
-    }
-    setError(null)
-    if (files.length > 0) onFiles(files)
+    const accepted = files.filter((file) => file.size <= 5_000_000)
+    setError(invalid ? `${invalid.name} is larger than 5 MB.` : null)
+    if (accepted.length > 0) onFiles(accepted)
   }
 
   return (
     <div
+      aria-label="Document drop zone"
       className="rounded-xl border border-dashed border-border px-4 py-6 text-sm"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
@@ -36,12 +47,13 @@ export function DocumentUploadZone({
         <input
           type="file"
           multiple
+          accept=".pdf,.docx,.txt,.md,text/plain,text/markdown,application/pdf"
           disabled={disabled}
           aria-describedby={error ? "upload-error" : undefined}
           onChange={(event) => accept(event.target.files)}
         />
       </label>
-      <p className="mt-2 text-xs text-muted-foreground">Files stay local until an ingestion API accepts them.</p>
+      <p className="mt-2 text-xs text-muted-foreground">{note}</p>
       {error ? (
         <p id="upload-error" role="alert" className="mt-2 text-destructive">
           {error}
@@ -51,16 +63,22 @@ export function DocumentUploadZone({
   )
 }
 
-export function IngestionProgress({ stage, failed = false }: { stage: (typeof stages)[number] | "Failed"; failed?: boolean }) {
+export function IngestionProgress({
+  stage,
+  failed = false,
+}: {
+  stage: (typeof stages)[number] | "FAILED"
+  failed?: boolean
+}) {
   return (
     <ol className="grid gap-1 text-sm" aria-label="Ingestion progress">
       {stages.map((item) => (
-        <li key={item} aria-current={item === stage ? "step" : undefined}>
-          {item}
-          {item === stage && !failed ? " · current" : ""}
+        <li key={item} aria-current={!failed && item === stage ? "step" : undefined}>
+          {stageLabels[item]}
+          {!failed && item === stage ? " · current" : ""}
         </li>
       ))}
-      {failed ? <li role="alert">Failed</li> : null}
+      {failed ? <li role="alert">Failed at {stage === "FAILED" ? "ingestion" : stageLabels[stage]}</li> : null}
     </ol>
   )
 }
