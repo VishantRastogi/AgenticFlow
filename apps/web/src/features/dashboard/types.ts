@@ -35,6 +35,8 @@ export type ExecutionRecord = {
   attempt?: number
   retryOf?: string | null
   cursor?: number
+  /** Set when the run is created. Older records omit it and are not rewritten. */
+  agentVersion?: string
 }
 
 export type OperationsFixture = {

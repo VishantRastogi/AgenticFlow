@@ -193,6 +193,7 @@ export function triggerStoredExecution(id: string) {
     status: failed ? "failed" : "succeeded",
     startedAt: new Date(Date.parse(SIMULATED_NOW) - overlay.executions.length * 1000).toISOString(),
     durationMs: failed ? 2400 : 900,
+    agentVersion: agent.version,
   }
   overlay.executions.push(execution)
   writeOverlay(overlay)

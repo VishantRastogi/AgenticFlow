@@ -19,6 +19,7 @@ import { auditActor, recordAudit } from "@/mocks/audit-store"
 import { auditHandlers } from "@/mocks/audit-handlers"
 import { deploymentHandlers } from "@/mocks/deployment-handlers"
 import { executionHandlers } from "@/mocks/execution-handlers"
+import { agentStudioHandlers } from "@/mocks/agent-studio-handlers"
 import { knowledgeHandlers } from "@/mocks/knowledge-handlers"
 import { playgroundHandlers } from "@/mocks/playground-handlers"
 import { ragHandlers } from "@/mocks/rag-handlers"
@@ -252,6 +253,8 @@ export const handlers = [
     })
     return HttpResponse.json({ agent }, { status: 201 })
   }),
+
+  ...agentStudioHandlers,
 
   http.get("*/api/agents/:id", ({ params }) => {
     const agent = listAgents().find((item) => item.id === params.id)

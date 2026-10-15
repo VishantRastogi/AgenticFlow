@@ -10,7 +10,17 @@ import {
   triggerAgentExecution,
   updateAgent,
 } from "@/features/agents/api"
+import {
+  getAgentStudio,
+  listAgentTools,
+  publishAgentStudio,
+  rollbackAgentStudio,
+  saveAgentStudio,
+  testAgentStudio,
+} from "@/features/agents/studio-api"
+import type { AgentConfiguration, AgentPublishRequest, AgentRollbackRequest, AgentTestRequest } from "@/features/agents/studio-types"
 import type { AgentDetail, AgentListParams, AgentWriteInput } from "@/features/agents/types"
+import { localWorkspace } from "@/lib/workspace"
 
 export const agentKeys = {
   all: ["agents"] as const,
@@ -83,6 +93,57 @@ export function useSetAgentActive(id: string) {
       if (context?.previous) client.setQueryData(agentKeys.detail(id), context.previous)
     },
     onSettled: () => refreshAgents(client),
+  })
+}
+
+export function useAgentStudio(agentId: string) {
+  return useQuery({
+    queryKey: [...agentKeys.detail(agentId), "studio", localWorkspace.id],
+    queryFn: () => getAgentStudio(localWorkspace.id, agentId),
+  })
+}
+
+export function useAgentTools() {
+  return useQuery({
+    queryKey: ["agents", "tools", localWorkspace.id],
+    queryFn: () => listAgentTools(localWorkspace.id),
+  })
+}
+
+function refreshStudio(client: ReturnType<typeof useQueryClient>, agentId: string) {
+  return client.invalidateQueries({ queryKey: [...agentKeys.detail(agentId), "studio"] })
+}
+
+export function useSaveAgentStudio(agentId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (draft: AgentConfiguration) => saveAgentStudio(localWorkspace.id, agentId, draft),
+    onSuccess: () => refreshStudio(client, agentId),
+  })
+}
+
+export function usePublishAgentStudio(agentId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (input: Omit<AgentPublishRequest, "workspaceId">) =>
+      publishAgentStudio(agentId, { ...input, workspaceId: localWorkspace.id }),
+    onSuccess: () => refreshAgents(client).then(() => refreshStudio(client, agentId)),
+  })
+}
+
+export function useRollbackAgentStudio(agentId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (input: Omit<AgentRollbackRequest, "workspaceId">) =>
+      rollbackAgentStudio(agentId, { ...input, workspaceId: localWorkspace.id }),
+    onSuccess: () => refreshStudio(client, agentId),
+  })
+}
+
+export function useTestAgentStudio(agentId: string) {
+  return useMutation({
+    mutationFn: (input: Omit<AgentTestRequest, "workspaceId">) =>
+      testAgentStudio(agentId, { ...input, workspaceId: localWorkspace.id }),
   })
 }
 

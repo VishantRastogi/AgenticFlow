@@ -11,12 +11,13 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { isApiError } from "@/features/auth/api/errors"
 import { AgentForm } from "@/features/agents/components/agent-form"
+import { AgentStudioPanel } from "@/features/agents/components/studio-panel"
 import { useAgent, useDeleteAgent, useSetAgentActive, useTriggerExecution, useUpdateAgent } from "@/features/agents/hooks"
 import type { AgentWriteInput } from "@/features/agents/types"
 import { formatDuration, formatPercent, formatTimestamp } from "@/features/dashboard/format"
 import { motionTransition } from "@/lib/motion"
 
-const tabs = ["Overview", "Configuration", "Executions", "Logs", "Versions"] as const
+const tabs = ["Overview", "Configuration", "Knowledge", "Tools", "Executions", "Traces", "Versions"] as const
 type AgentTab = (typeof tabs)[number]
 
 const statusTone = {
@@ -160,29 +161,44 @@ export function AgentDetailScreen({ agentId }: { agentId: string }) {
           exit={skipMotion ? { opacity: 1 } : { opacity: 0, x: -8 }}
           transition={motionTransition(reduced)}
         >
-          {tab === "Overview" ? <Overview data={current} /> : null}
-          {tab === "Configuration" ? (
-            <AgentForm
-              mode="edit"
-              pending={update.isPending}
-              error={formError}
-              defaults={{
-                name: current.agent.name,
-                description: current.agent.description,
-                type: current.agent.type,
-                environment: current.agent.environment,
-                timeoutMs: current.agent.timeoutMs,
-                retryPolicy: current.agent.retryPolicy,
-                version: current.agent.version,
-                status: current.agent.status,
-                configuration: JSON.stringify(current.agent.configuration, null, 2),
-              }}
-              onSubmit={save}
-            />
+          {tab === "Overview" ? (
+            <div className="grid gap-6">
+              <Overview data={current} />
+              <AgentStudioPanel agentId={current.agent.id} section="test" />
+            </div>
           ) : null}
+          {tab === "Configuration" ? (
+            <div className="grid gap-8">
+              <AgentForm
+                mode="edit"
+                pending={update.isPending}
+                error={formError}
+                defaults={{
+                  name: current.agent.name,
+                  description: current.agent.description,
+                  type: current.agent.type,
+                  environment: current.agent.environment,
+                  timeoutMs: current.agent.timeoutMs,
+                  retryPolicy: current.agent.retryPolicy,
+                  version: current.agent.version,
+                  status: current.agent.status,
+                  configuration: JSON.stringify(current.agent.configuration, null, 2),
+                }}
+                onSubmit={save}
+              />
+              <AgentStudioPanel agentId={current.agent.id} section="configuration" />
+            </div>
+          ) : null}
+          {tab === "Knowledge" ? <AgentStudioPanel agentId={current.agent.id} section="knowledge" /> : null}
+          {tab === "Tools" ? <AgentStudioPanel agentId={current.agent.id} section="tools" /> : null}
           {tab === "Executions" ? <ExecutionList executions={current.executions} /> : null}
-          {tab === "Logs" ? <LogList logs={current.logs} /> : null}
-          {tab === "Versions" ? <VersionList versions={current.versions} /> : null}
+          {tab === "Traces" ? <LogList logs={current.logs} /> : null}
+          {tab === "Versions" ? (
+            <div className="grid gap-6">
+              <VersionList versions={current.versions} />
+              <AgentStudioPanel agentId={current.agent.id} section="versions" />
+            </div>
+          ) : null}
         </motion.div>
       </AnimatePresence>
       <ConfirmDialog
@@ -233,7 +249,7 @@ function Overview({ data }: { data: NonNullable<ReturnType<typeof useAgent>["dat
   )
 }
 
-function ExecutionList({ executions }: { executions: { id: string; status: keyof typeof executionTone; startedAt: string; durationMs: number | null }[] }) {
+function ExecutionList({ executions }: { executions: { id: string; status: keyof typeof executionTone; startedAt: string; durationMs: number | null; agentVersion?: string }[] }) {
   if (executions.length === 0) return <p className="mt-3 text-sm text-muted-foreground">No executions yet.</p>
   return (
     <ul className="mt-3 flex flex-col gap-2">
@@ -243,7 +259,9 @@ function ExecutionList({ executions }: { executions: { id: string; status: keyof
             {execution.id}
           </Link>
           <StatusBadge tone={executionTone[execution.status]}>{label(execution.status)}</StatusBadge>
-          <span className="text-xs text-muted-foreground">{formatTimestamp(execution.startedAt)}</span>
+          <span className="text-xs text-muted-foreground">
+            {formatTimestamp(execution.startedAt)} · version {execution.agentVersion ?? "Not recorded"}
+          </span>
           <span className="font-mono text-xs text-muted-foreground">{formatDuration(execution.durationMs)}</span>
         </li>
       ))}
