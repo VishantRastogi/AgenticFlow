@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react"
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
-import { GitBranch, Globe, Flag, Sparkles, Timer, UserCheck, Webhook, Zap } from "lucide-react"
+import { Binary, Bot, Braces, FileUp, GitBranch, Globe, Flag, Play, Search, Sparkles, Timer, UserCheck, UserRound, Webhook, Wrench, Zap } from "lucide-react"
 import type { NodeRunStatus, WorkflowNodeData, WorkflowNodeKind } from "@/features/workflows/types"
 
 export type FlowNode = Node<WorkflowNodeData, WorkflowNodeKind>
@@ -21,6 +21,14 @@ const icons = {
   delay: Timer,
   approval: UserCheck,
   output: Flag,
+  llm: Bot,
+  rag: Search,
+  ingestion: FileUp,
+  embedding: Binary,
+  tool: Wrench,
+  agent_execution: Play,
+  human_approval: UserRound,
+  structured_output: Braces,
 } as const
 
 export function WorkflowNodeView({ id, data, type, selected }: NodeProps<FlowNode>) {
@@ -55,15 +63,15 @@ export function WorkflowNodeView({ id, data, type, selected }: NodeProps<FlowNod
           <p className="text-[10px] tracking-wide text-muted-foreground uppercase">{kind === "api" ? "API request" : kind === "model" ? "AI model" : kind}</p>
         </div>
       </div>
-      {kind === "condition" ? (
+      {kind === "condition" || kind === "human_approval" || kind === "structured_output" ? (
         <>
-          <span className="absolute top-[30%] right-4 text-[10px] text-highlight">True</span>
-          <span className="absolute top-[62%] right-4 text-[10px] text-muted-foreground">False</span>
-          <Handle id="true" type="source" position={Position.Right} style={{ top: "38%" }} />
-          <Handle id="false" type="source" position={Position.Right} style={{ top: "70%" }} />
+          <span className="absolute top-[30%] right-4 text-[10px] text-highlight">{kind === "condition" ? "True" : kind === "human_approval" ? "Approve" : "Valid"}</span>
+          <span className="absolute top-[62%] right-4 text-[10px] text-muted-foreground">{kind === "condition" ? "False" : kind === "human_approval" ? "Reject" : "Error"}</span>
+          <Handle id={kind === "condition" ? "true" : kind === "human_approval" ? "approve" : "valid"} type="source" position={Position.Right} style={{ top: "38%" }} />
+          <Handle id={kind === "condition" ? "false" : kind === "human_approval" ? "reject" : "error"} type="source" position={Position.Right} style={{ top: "70%" }} />
         </>
       ) : null}
-      {kind !== "condition" && kind !== "output" ? <Handle type="source" position={Position.Right} /> : null}
+      {kind !== "condition" && kind !== "human_approval" && kind !== "structured_output" && kind !== "output" ? <Handle type="source" position={Position.Right} /> : null}
     </div>
   )
 }

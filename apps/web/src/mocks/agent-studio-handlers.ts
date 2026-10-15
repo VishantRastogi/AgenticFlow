@@ -7,6 +7,7 @@ import {
   publishAgentStudio,
   rollbackAgentStudio,
   saveAgentStudio,
+  listAgentTestRuns,
   testAgentStudio,
 } from "@/mocks/agent-studio-store"
 import type { StoreFailure } from "@/mocks/knowledge-store"
@@ -58,6 +59,12 @@ export const agentStudioHandlers = [
     const body = (await request.json().catch(() => null)) as AgentRollbackRequest | null
     if (!body || body.workspaceId !== workspaceOf(request)) return error(400, "validation_error", "Workspace scope does not match.")
     const result = rollbackAgentStudio(String(params.id), body)
+    if (isFailure(result)) return error(result.status, result.code, result.message)
+    return HttpResponse.json(result)
+  }),
+
+  http.get("*/api/agents/:id/studio/runs", ({ params, request }) => {
+    const result = listAgentTestRuns(workspaceOf(request), String(params.id))
     if (isFailure(result)) return error(result.status, result.code, result.message)
     return HttpResponse.json(result)
   }),

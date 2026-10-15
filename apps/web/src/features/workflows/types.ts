@@ -7,6 +7,14 @@ export const workflowNodeKinds = [
   "delay",
   "approval",
   "output",
+  "llm",
+  "rag",
+  "ingestion",
+  "embedding",
+  "tool",
+  "agent_execution",
+  "human_approval",
+  "structured_output",
 ] as const
 
 export type WorkflowNodeKind = (typeof workflowNodeKinds)[number]
@@ -27,7 +35,39 @@ export type WorkflowNodeData = {
   expression?: string
   durationMs?: number
   assignee?: string
+  provider?: string
+  promptTemplate?: string
+  temperature?: number
+  maxOutputTokens?: number
+  outputSchema?: string
+  timeoutMs?: number
+  budgetUsd?: number
+  knowledgeBaseId?: string
+  strategy?: "vector" | "keyword" | "hybrid"
+  topK?: number
+  scoreThreshold?: number
+  rerank?: boolean
+  contextTokenBudget?: number
+  documentRef?: string
+  processingPolicy?: "parse" | "parse_and_index"
+  embeddingModel?: string
+  textInput?: string
+  batchSize?: number
+  toolId?: string
+  inputMapping?: string
+  retryPolicy?: "none" | "fixed" | "exponential"
+  retries?: number
+  requiresApproval?: boolean
+  agentId?: string
+  agentVersion?: string
+  executionLimit?: number
+  approverRole?: string
+  approvalMessage?: string
+  failurePolicy?: "fail" | "branch"
 }
+
+/** Configuration carried on a node. Node ids stay stable when this object changes. */
+export type WorkflowNodeConfiguration = WorkflowNodeData
 
 export type WorkflowNode = {
   id: string

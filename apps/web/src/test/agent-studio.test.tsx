@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { getAgent, triggerAgentExecution } from "@/features/agents/api"
 import { AgentDetailScreen } from "@/features/agents/components/agent-detail-screen"
 import { defaultAgentConfiguration } from "@/features/agents/studio-catalog"
-import { getAgentStudio, publishAgentStudio, rollbackAgentStudio, saveAgentStudio, testAgentStudio } from "@/features/agents/studio-api"
+import { getAgentStudio, listAgentTestRuns, publishAgentStudio, rollbackAgentStudio, saveAgentStudio, testAgentStudio } from "@/features/agents/studio-api"
 import type { AgentConfiguration } from "@/features/agents/studio-types"
 import { createKnowledgeBase, uploadDocument } from "@/features/knowledge/api"
 import type { KnowledgeBaseCreateRequest } from "@/features/knowledge/types"
@@ -170,7 +170,16 @@ describe("agent studio API", () => {
     const snapshot = structuredClone(published.versions[0]?.configuration)
     expect(published.publishedVersion).toBe("9.1.0")
     expect(published.versions[0]?.immutable).toBe(true)
-    expect((await getAgent("agt_cedar")).agent.version).toBe("9.1.0")
+    expect((await getAgent("agt_cedar")).agent.version).toBe(before.agent.version)
+
+    await publishAgentStudio("agt_cedar", {
+      workspaceId: "other",
+      version: "9.1.0",
+      note: "Publish the other workspace.",
+    })
+    expect((await getAgentStudio("local", "agt_cedar")).publishedVersion).toBe("9.1.0")
+    expect((await getAgentStudio("other", "agt_cedar")).versions).toHaveLength(1)
+    expect((await getAgent("agt_cedar")).agent.version).toBe(before.agent.version)
 
     await saveAgentStudio("local", "agt_cedar", draft((config) => {
       config.model.temperature = 0.8
@@ -191,9 +200,10 @@ describe("agent studio API", () => {
     expect(restored.versions[0]?.configuration.model.temperature).toBe(0.4)
 
     const first = await triggerAgentExecution("agt_cedar")
-    expect(first.execution.agentVersion).toBe("9.1.0")
+    expect(first.execution.agentVersion).toBe(before.agent.version)
     const historical = (await getAgent("agt_cedar")).executions.find((execution) => execution.id !== first.execution.id)
     expect(historical?.agentVersion).toBeUndefined()
+    expect(historical?.agentVersion ?? "unknown").toBe("unknown")
   })
 
   it("keeps simulated tests inside step, token, tool, and cost limits", async () => {
@@ -236,6 +246,28 @@ describe("agent studio API", () => {
       code: "rate_limited",
     })
     expect((await getAgent("agt_cedar")).executions.some((execution) => execution.id.startsWith("agt_test_"))).toBe(false)
+
+    const recorded = await testAgentStudio("agt_cedar", { workspaceId: "local", version: "draft", input: "Summarize the handbook" })
+    const history = await listAgentTestRuns("local", "agt_cedar")
+    expect(history.runs[0]).toMatchObject({
+      runId: recorded.requestId,
+      traceId: recorded.traceId,
+      agentId: "agt_cedar",
+      workspaceId: "local",
+      agentVersion: "draft",
+      status: recorded.status,
+      durationMs: recorded.latencyMs,
+    })
+    expect(history.runs[0]?.steps.length).toBeGreaterThan(0)
+    expect((await listAgentTestRuns("other", "agt_cedar")).runs).toHaveLength(0)
+    expect((await listAgentTestRuns("local", "agt_cedar")).runs[0]?.runId).toBe(recorded.requestId)
+
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      testAgentStudio("agt_cedar", { workspaceId: "local", version: "draft", input: "Summarize the handbook" }, controller.signal),
+    ).rejects.toMatchObject({ code: "cancelled" })
+    expect((await listAgentTestRuns("local", "agt_cedar")).runs[0]?.runId).toBe(recorded.requestId)
   })
 
   it("fails closed in real mode and leaves the mock draft in place", async () => {
@@ -282,5 +314,11 @@ describe("agent studio screen", () => {
     expect(screen.getByLabelText("Agent version")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Run simulation" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Run simulation" }))
+    expect(await screen.findByText(/Simulated agent test/)).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Stop" }))
+    expect(screen.getByRole("alert")).toHaveTextContent("Simulation stopped. No further steps were applied.")
+    expect(screen.queryByText(/Simulated agent test/)).not.toBeInTheDocument()
+    expect(await screen.findByRole("region", { name: "Test history" })).toBeInTheDocument()
   })
 })

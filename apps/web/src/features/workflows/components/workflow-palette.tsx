@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef } from "react"
-import { GitBranch, Globe, Flag, Sparkles, Timer, UserCheck, Webhook, Zap, type LucideIcon } from "lucide-react"
+import { Binary, Bot, Braces, FileUp, GitBranch, Globe, Flag, Play, Search, Sparkles, Timer, UserCheck, UserRound, Webhook, Wrench, Zap, type LucideIcon } from "lucide-react"
 import type { WorkflowNodeKind } from "@/features/workflows/types"
 
 const items: { kind: WorkflowNodeKind; title: string; detail: string; icon: LucideIcon }[] = [
@@ -13,6 +13,14 @@ const items: { kind: WorkflowNodeKind; title: string; detail: string; icon: Luci
   { kind: "delay", title: "Delay", detail: "Wait", icon: Timer },
   { kind: "approval", title: "Human Approval", detail: "Review", icon: UserCheck },
   { kind: "output", title: "Output", detail: "Result", icon: Flag },
+  { kind: "llm", title: "LLM Generation", detail: "Prompt", icon: Bot },
+  { kind: "rag", title: "RAG Retrieval", detail: "Knowledge", icon: Search },
+  { kind: "ingestion", title: "Document Ingestion", detail: "Documents", icon: FileUp },
+  { kind: "embedding", title: "Embedding Generation", detail: "Vectors", icon: Binary },
+  { kind: "tool", title: "Tool Invocation", detail: "Registry", icon: Wrench },
+  { kind: "agent_execution", title: "Agent Execution", detail: "Agent", icon: Play },
+  { kind: "human_approval", title: "Approval Gate", detail: "Pause", icon: UserRound },
+  { kind: "structured_output", title: "Structured Output Validation", detail: "Schema", icon: Braces },
 ]
 
 export function WorkflowPalette({ onAdd }: { onAdd: (kind: WorkflowNodeKind) => void }) {

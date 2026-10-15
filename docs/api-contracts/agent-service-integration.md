@@ -42,7 +42,9 @@ An unknown agent is `404` `not_found` with `Agent not found.` The existing catal
 
 `AgentPublishRequest` is `{ workspaceId, version, note }`. `version` matches `major.minor.patch`. `note` is 4 to 160 characters. The service copies the validated draft into an `AgentVersionSnapshot` with `immutable: true`. Publishing the same version again is `409` `invalid_job_transition` with `That version is already published and cannot be changed.`
 
-The mock also updates the catalog `agent.version` so the next `agents.trigger` records that version. Historical `ExecutionRecord` rows keep the `agentVersion` they were created with. Rows created before this field existed omit it.
+Published snapshots are stored only for the `workspaceId` and agent id in the request. Publishing does not change the shared catalog `agent.version`, so another workspace keeps its own draft and snapshots. `agents.trigger` records the catalog profile version at that moment. Historical `ExecutionRecord` rows keep the `agentVersion` they were created with. Rows that omit it stay omitted; the UI shows `unknown`.
+
+`GET /api/agents/:id/studio/runs?workspaceId=` lists simulated test runs for that workspace and agent. Each run has `runId`, `traceId`, `agentId`, `agentVersion`, `workspaceId`, `steps`, `status`, `startedAt`, and `durationMs`. A cancelled test request is aborted in the browser and is not applied to the console. Test runs are not written into the catalog execution list.
 
 `AgentRollbackRequest` is `{ workspaceId, version }`. Rollback copies that snapshot into `draft`. It does not change the snapshot or `publishedVersion`. A missing version is `404` `not_found` with `Published version not found.`
 

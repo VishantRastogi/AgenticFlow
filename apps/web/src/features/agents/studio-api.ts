@@ -6,6 +6,7 @@ import type {
   AgentStudioRecord,
   AgentTestRequest,
   AgentTestResponse,
+  AgentTestRunList,
   AgentToolDefinition,
 } from "@/features/agents/studio-types"
 
@@ -40,11 +41,19 @@ export function rollbackAgentStudio(agentId: string, input: AgentRollbackRequest
   })
 }
 
-export function testAgentStudio(agentId: string, input: AgentTestRequest) {
+export function testAgentStudio(agentId: string, input: AgentTestRequest, signal?: AbortSignal) {
   return callContract<AgentTestResponse>("agents.studio.test", {
     params: { id: agentId },
     query: { workspaceId: input.workspaceId },
     body: input,
+    signal,
+  })
+}
+
+export function listAgentTestRuns(workspaceId: string, agentId: string) {
+  return callContract<AgentTestRunList>("agents.studio.runs", {
+    params: { id: agentId },
+    query: { workspaceId },
   })
 }
 

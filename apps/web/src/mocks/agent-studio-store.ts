@@ -8,24 +8,33 @@ import type {
   AgentStudioRecord,
   AgentTestRequest,
   AgentTestResponse,
+  AgentTestRunList,
+  AgentTestRunRecord,
   AgentVersionSnapshot,
 } from "@/features/agents/studio-types"
 import { assessAgentConfiguration } from "@/features/agents/studio-validate"
 import { agentModel } from "@/features/agents/studio-catalog"
 import { isWorkspaceId } from "@/features/knowledge/validate"
 import { listIndexedChunks, type StoreFailure } from "@/mocks/knowledge-store"
-import { listAgents, updateStoredAgent } from "@/mocks/operations-store"
+import { listAgents } from "@/mocks/operations-store"
 import { SIMULATED_NOW } from "@/mocks/fixtures/operations"
 
 const STORAGE_KEY = "agentflow-mock-agent-studio"
 
+type StudioRecord = {
+  draft: AgentConfiguration
+  publishedVersion: string | null
+  versions: AgentVersionSnapshot[]
+}
+
 type Database = {
   sequence: number
-  records: Record<string, { draft: AgentConfiguration; publishedVersion: string | null; versions: AgentVersionSnapshot[] }>
+  records: Record<string, StudioRecord>
+  runs: AgentTestRunRecord[]
 }
 
 function emptyDatabase(): Database {
-  return { sequence: 1, records: {} }
+  return { sequence: 1, records: {}, runs: [] }
 }
 
 function readDatabase(): Database {
@@ -35,6 +44,7 @@ function readDatabase(): Database {
   try {
     const parsed = JSON.parse(raw) as Database
     if (!parsed || typeof parsed.sequence !== "number" || !parsed.records) return emptyDatabase()
+    if (!Array.isArray(parsed.runs)) parsed.runs = []
     return parsed
   } catch {
     return emptyDatabase()
@@ -146,7 +156,6 @@ export function publishAgentStudio(agentId: string, input: AgentPublishRequest):
   current.draft = assessed.configuration
   database.records[key(input.workspaceId, agentId)] = current
   writeDatabase(database)
-  updateStoredAgent(agentId, { version: snapshot.version })
   return present(input.workspaceId, agentId, database)
 }
 
@@ -160,6 +169,13 @@ export function rollbackAgentStudio(agentId: string, input: AgentRollbackRequest
   current.draft = structuredClone(source.configuration)
   writeDatabase(database)
   return present(input.workspaceId, agentId, database)
+}
+
+export function listAgentTestRuns(workspaceId: string, agentId: string): AgentTestRunList | StoreFailure {
+  const invalid = requireScope(workspaceId, agentId)
+  if (invalid) return invalid
+  const runs = readDatabase().runs.filter((run) => run.workspaceId === workspaceId && run.agentId === agentId)
+  return { simulated: true, workspaceId, agentId, runs }
 }
 
 function configurationFor(record: Database["records"][string] | undefined, version: string): AgentConfiguration | StoreFailure {
@@ -184,8 +200,23 @@ export function testAgentStudio(agentId: string, input: AgentTestRequest): Agent
   const databaseAfter = readDatabase()
   databaseAfter.sequence += 1
   const requestId = `agt_test_${databaseAfter.sequence}`
+  const version = input.version?.trim() || "unknown"
+  const result = simulate(requestId, input.workspaceId, agentId, version, input.input.trim(), configuration)
+  const run: AgentTestRunRecord = {
+    runId: result.requestId,
+    traceId: result.traceId,
+    workspaceId: input.workspaceId,
+    agentId,
+    agentVersion: version,
+    status: result.status,
+    steps: result.steps,
+    startedAt: SIMULATED_NOW,
+    durationMs: result.latencyMs,
+    simulated: true,
+  }
+  databaseAfter.runs = [run, ...(databaseAfter.runs ?? [])]
   writeDatabase(databaseAfter)
-  return simulate(requestId, input.workspaceId, agentId, input.version || "draft", input.input.trim(), configuration)
+  return result
 }
 
 function simulate(
@@ -315,6 +346,7 @@ function simulate(
   return {
     simulated: true,
     requestId,
+    traceId: `trc_${requestId}`,
     workspaceId,
     agentId,
     version,

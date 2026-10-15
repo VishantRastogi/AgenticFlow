@@ -22,6 +22,7 @@ import { playbackFrames } from "@/features/workflows/simulate"
 import { validateWorkflow } from "@/features/workflows/validate"
 import { WorkflowCanvas } from "@/features/workflows/components/workflow-canvas"
 import { WorkflowInspector } from "@/features/workflows/components/workflow-inspector"
+import { useWorkflowReferences } from "@/features/workflows/references"
 import { WorkflowPalette } from "@/features/workflows/components/workflow-palette"
 import type { FlowNode } from "@/features/workflows/components/workflow-node"
 import type { PlaybackFrame, WorkflowGraph, WorkflowNodeData, WorkflowNodeKind, WorkflowStatus } from "@/features/workflows/types"
@@ -63,7 +64,8 @@ function WorkflowEditorBody({ workflowId }: { workflowId?: string }) {
   const savedSignature = useRef(workflowId ? "" : JSON.stringify({ name: "Untitled workflow", description: "", graph: blankWorkflowGraph() }))
 
   const graph = history.present
-  const issues = useMemo(() => validateWorkflow(graph), [graph])
+  const references = useWorkflowReferences(graph)
+  const issues = useMemo(() => validateWorkflow(graph, references), [graph, references])
   const selected = graph.nodes.find((node) => node.id === selectedId) ?? null
   const signature = JSON.stringify({ name, description, graph })
 
@@ -398,6 +400,8 @@ function WorkflowEditorBody({ workflowId }: { workflowId?: string }) {
               setSelectedId(id)
               setInspectorOpen(true)
             }}
+            workflowId={workflowId}
+            graph={graph}
           />
         </aside>
       </div>

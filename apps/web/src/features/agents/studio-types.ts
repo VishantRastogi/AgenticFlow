@@ -134,6 +134,7 @@ export type AgentExecutionStep = {
 export type AgentTestResponse = {
   simulated: true
   requestId: string
+  traceId: string
   workspaceId: string
   agentId: string
   version: string
@@ -144,4 +145,26 @@ export type AgentTestResponse = {
   estimatedCostUsd: number
   error: string | null
   notice: string
+}
+
+/** A simulated test run. Catalog executions are a separate history and are not rewritten. */
+export type AgentTestRunRecord = {
+  runId: string
+  traceId: string
+  workspaceId: string
+  agentId: string
+  /** `draft`, a published version, or `unknown` when the run did not record one. */
+  agentVersion: string
+  status: AgentTestResponse["status"]
+  steps: AgentExecutionStep[]
+  startedAt: string
+  durationMs: number
+  simulated: true
+}
+
+export type AgentTestRunList = {
+  simulated: true
+  workspaceId: string
+  agentId: string
+  runs: AgentTestRunRecord[]
 }

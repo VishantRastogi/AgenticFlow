@@ -13,6 +13,18 @@ import {
   startStoredRun,
   updateStoredWorkflow,
 } from "@/mocks/workflow-store"
+import {
+  cancelWorkflowExecution,
+  decideWorkflowApproval,
+  getWorkflowStudio,
+  listWorkflowExecutions,
+  publishWorkflowStudio,
+  rollbackWorkflowStudio,
+  startWorkflowExecution,
+  validateWorkflowStudio,
+} from "@/mocks/workflow-studio-store"
+import type { WorkflowApprovalDecision, WorkflowExecutionRequest, WorkflowPublishRequest, WorkflowRollbackRequest } from "@/features/workflows/studio-types"
+import type { StoreFailure } from "@/mocks/knowledge-store"
 
 function error(status: number, body: ApiErrorBody) {
   return HttpResponse.json(body, { status })
@@ -25,7 +37,73 @@ function readWrite(body: Partial<WorkflowWriteInput>) {
   return { name, description, graph: body.graph }
 }
 
+function isFailure(result: unknown): result is StoreFailure {
+  return typeof result === "object" && result !== null && "ok" in result && (result as StoreFailure).ok === false
+}
+
+function workspaceOf(request: Request) {
+  return new URL(request.url).searchParams.get("workspaceId") ?? ""
+}
+
 export const workflowHandlers = [
+  http.get("*/api/workflows/:id/studio", ({ params, request }) => {
+    const result = getWorkflowStudio(workspaceOf(request), String(params.id))
+    if (isFailure(result)) return error(result.status, { code: result.code, message: result.message })
+    return HttpResponse.json(result)
+  }),
+
+  http.get("*/api/workflows/:id/validation", ({ params, request }) => {
+    const result = validateWorkflowStudio(workspaceOf(request), String(params.id))
+    if (isFailure(result)) return error(result.status, { code: result.code, message: result.message })
+    return HttpResponse.json(result)
+  }),
+
+  http.post("*/api/workflows/:id/studio/publish", async ({ params, request }) => {
+    const body = (await request.json().catch(() => null)) as WorkflowPublishRequest | null
+    if (!body || body.workspaceId !== workspaceOf(request)) return error(400, { code: "validation_error", message: "Workspace scope does not match." })
+    const result = publishWorkflowStudio(String(params.id), body)
+    if (isFailure(result)) return error(result.status, { code: result.code, message: result.message })
+    return HttpResponse.json(result)
+  }),
+
+  http.post("*/api/workflows/:id/studio/rollback", async ({ params, request }) => {
+    const body = (await request.json().catch(() => null)) as WorkflowRollbackRequest | null
+    if (!body || body.workspaceId !== workspaceOf(request)) return error(400, { code: "validation_error", message: "Workspace scope does not match." })
+    const result = rollbackWorkflowStudio(String(params.id), body)
+    if (isFailure(result)) return error(result.status, { code: result.code, message: result.message })
+    return HttpResponse.json(result)
+  }),
+
+  http.get("*/api/workflows/:id/executions", ({ params, request }) => {
+    const result = listWorkflowExecutions(workspaceOf(request), String(params.id))
+    if (isFailure(result)) return error(result.status, { code: result.code, message: result.message })
+    return HttpResponse.json(result)
+  }),
+
+  http.post("*/api/workflows/:id/executions/:executionId/approval", async ({ params, request }) => {
+    const body = (await request.json().catch(() => null)) as WorkflowApprovalDecision | null
+    if (!body || body.workspaceId !== workspaceOf(request)) return error(400, { code: "validation_error", message: "Workspace scope does not match." })
+    const result = decideWorkflowApproval(String(params.id), String(params.executionId), body)
+    if (isFailure(result)) return error(result.status, { code: result.code, message: result.message })
+    return HttpResponse.json(result)
+  }),
+
+  http.post("*/api/workflows/:id/executions/:executionId/cancel", async ({ params, request }) => {
+    const body = (await request.json().catch(() => null)) as { workspaceId?: string } | null
+    if (!body || body.workspaceId !== workspaceOf(request)) return error(400, { code: "validation_error", message: "Workspace scope does not match." })
+    const result = cancelWorkflowExecution(String(params.id), String(params.executionId), body.workspaceId)
+    if (isFailure(result)) return error(result.status, { code: result.code, message: result.message })
+    return HttpResponse.json(result)
+  }),
+
+  http.post("*/api/workflows/:id/executions", async ({ params, request }) => {
+    const body = (await request.json().catch(() => null)) as WorkflowExecutionRequest | null
+    if (!body || body.workspaceId !== workspaceOf(request)) return error(400, { code: "validation_error", message: "Workspace scope does not match." })
+    const result = startWorkflowExecution(String(params.id), body)
+    if (isFailure(result)) return error(result.status, { code: result.code, message: result.message })
+    return HttpResponse.json(result, { status: 201 })
+  }),
+
   http.get("*/api/workflows", ({ request }) => {
     const url = new URL(request.url)
     const query = {

@@ -4,8 +4,10 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { isStudioNode, StudioNodeFields } from "@/features/workflows/components/workflow-node-fields"
+import { WorkflowStudioPanel } from "@/features/workflows/components/workflow-studio-panel"
 import { nodeSchema } from "@/features/workflows/schemas"
-import type { WorkflowIssue, WorkflowNode, WorkflowNodeData } from "@/features/workflows/types"
+import type { WorkflowGraph, WorkflowIssue, WorkflowNode, WorkflowNodeData } from "@/features/workflows/types"
 
 const controlClass = "min-h-11 lg:min-h-8"
 
@@ -17,6 +19,8 @@ export function WorkflowInspector({
   onDescription,
   onNodeChange,
   onSelect,
+  workflowId,
+  graph,
 }: {
   node: WorkflowNode | null
   description: string
@@ -25,6 +29,8 @@ export function WorkflowInspector({
   onDescription: (value: string) => void
   onNodeChange: (id: string, data: WorkflowNodeData) => void
   onSelect: (id: string) => void
+  workflowId?: string
+  graph: WorkflowGraph
 }) {
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
@@ -33,7 +39,11 @@ export function WorkflowInspector({
         <h2 className="mt-1 text-base font-medium">{node ? node.data.label : "Workflow"}</h2>
       </div>
       {node ? (
-        <NodeFields key={`${node.id}:${epoch}`} node={node} onChange={onNodeChange} />
+        isStudioNode(node.type) ? (
+          <StudioNodeFields key={`${node.id}:${epoch}`} node={node} onChange={onNodeChange} />
+        ) : (
+          <NodeFields key={`${node.id}:${epoch}`} node={node} onChange={onNodeChange} />
+        )
       ) : (
         <label className="grid gap-1.5 text-sm font-medium">
           Description
@@ -60,6 +70,7 @@ export function WorkflowInspector({
           </ul>
         )}
       </section>
+      {workflowId ? <WorkflowStudioPanel workflowId={workflowId} graph={graph} /> : null}
       <section className="text-xs leading-5 text-muted-foreground">
         <p>Drag a node onto the canvas or tap one to add it.</p>
         <p>Undo ⌘Z · Redo ⇧⌘Z · Duplicate ⌘D · Save ⌘S</p>

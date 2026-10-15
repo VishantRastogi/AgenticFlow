@@ -61,6 +61,7 @@ export type ApiErrorCode =
   | "invalid_job_transition"
   | "processing_failed"
   | "rate_limited"
+  | "cancelled"
   | "network"
   | "api_unavailable"
   | "unknown"

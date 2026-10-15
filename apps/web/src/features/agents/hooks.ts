@@ -12,6 +12,7 @@ import {
 } from "@/features/agents/api"
 import {
   getAgentStudio,
+  listAgentTestRuns,
   listAgentTools,
   publishAgentStudio,
   rollbackAgentStudio,
@@ -140,10 +141,21 @@ export function useRollbackAgentStudio(agentId: string) {
   })
 }
 
+export function useAgentTestRuns(agentId: string) {
+  return useQuery({
+    queryKey: [...agentKeys.detail(agentId), "studio", "runs", localWorkspace.id],
+    queryFn: () => listAgentTestRuns(localWorkspace.id, agentId),
+  })
+}
+
 export function useTestAgentStudio(agentId: string) {
+  const client = useQueryClient()
   return useMutation({
-    mutationFn: (input: Omit<AgentTestRequest, "workspaceId">) =>
-      testAgentStudio(agentId, { ...input, workspaceId: localWorkspace.id }),
+    mutationFn: (input: Omit<AgentTestRequest, "workspaceId"> & { signal?: AbortSignal }) => {
+      const { signal, ...body } = input
+      return testAgentStudio(agentId, { ...body, workspaceId: localWorkspace.id }, signal)
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: [...agentKeys.detail(agentId), "studio", "runs"] }),
   })
 }
 

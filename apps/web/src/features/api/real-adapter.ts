@@ -8,6 +8,7 @@ export type ContractRequest = {
   params?: Record<string, string>
   query?: Record<string, string | number>
   body?: unknown
+  signal?: AbortSignal
 }
 
 function mockBaseUrl() {
@@ -81,6 +82,7 @@ export async function callContract<T>(id: ApiOperationId, request: ContractReque
     method: operation.method,
     body: request.body,
     token: operation.auth === "bearer" ? readAuthToken() : null,
+    signal: request.signal,
   })
 }
 

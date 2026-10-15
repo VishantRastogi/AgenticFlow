@@ -17,19 +17,11 @@ import "@xyflow/react/dist/style.css"
 import { useTheme } from "next-themes"
 import { connectionError } from "@/features/workflows/graph"
 import { FlowNode, WorkflowNodeView, WorkflowRunContext } from "@/features/workflows/components/workflow-node"
+import { workflowNodeKinds } from "@/features/workflows/types"
 import { isNodeKind } from "@/features/workflows/components/workflow-palette"
 import type { NodeRunStatus, WorkflowGraph, WorkflowNodeKind } from "@/features/workflows/types"
 
-const nodeTypes = {
-  trigger: WorkflowNodeView,
-  browser: WorkflowNodeView,
-  api: WorkflowNodeView,
-  model: WorkflowNodeView,
-  condition: WorkflowNodeView,
-  delay: WorkflowNodeView,
-  approval: WorkflowNodeView,
-  output: WorkflowNodeView,
-}
+const nodeTypes = Object.fromEntries(workflowNodeKinds.map((kind) => [kind, WorkflowNodeView]))
 
 export function WorkflowCanvas({
   graph,

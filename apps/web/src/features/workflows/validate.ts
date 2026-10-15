@@ -1,8 +1,15 @@
 import { connectionError } from "@/features/workflows/graph"
+import { branchHandles } from "@/features/workflows/ports"
 import { nodeSchema } from "@/features/workflows/schemas"
 import type { WorkflowGraph, WorkflowIssue, WorkflowNode } from "@/features/workflows/types"
 
-export function validateWorkflow(graph: WorkflowGraph): WorkflowIssue[] {
+export type WorkflowReferenceIndex = {
+  knowledgeBaseIds: string[]
+  toolIds: string[]
+  agents: { id: string; versions: string[] }[]
+}
+
+export function validateWorkflow(graph: WorkflowGraph, refs?: WorkflowReferenceIndex | null): WorkflowIssue[] {
   const issues: WorkflowIssue[] = []
   const triggers = graph.nodes.filter((node) => node.type === "trigger")
 
@@ -29,6 +36,51 @@ export function validateWorkflow(graph: WorkflowGraph): WorkflowIssue[] {
         nodeId: node.id,
         message: `${node.data.label || "Node"}: ${parsed.error.issues[0]?.message ?? "Check this node."}`,
       })
+    }
+  }
+
+  for (const node of graph.nodes) {
+    const branches = branchHandles(node.type)
+    if (!branches || node.type === "condition") continue
+    for (const handle of branches) {
+      if (!graph.edges.some((edge) => edge.source === node.id && edge.sourceHandle === handle)) {
+        issues.push({
+          code: "invalid_connection",
+          nodeId: node.id,
+          message: `${node.data.label} needs a ${handle} connection.`,
+        })
+      }
+    }
+  }
+
+  if (refs) {
+    for (const node of graph.nodes) {
+      if ((node.type === "rag" || node.type === "ingestion") && node.data.knowledgeBaseId && !refs.knowledgeBaseIds.includes(node.data.knowledgeBaseId)) {
+        issues.push({
+          code: "required",
+          nodeId: node.id,
+          message: `${node.data.label} references a knowledge base that is not in this workspace.`,
+        })
+      }
+      if (node.type === "tool" && node.data.toolId && !refs.toolIds.includes(node.data.toolId)) {
+        issues.push({
+          code: "required",
+          nodeId: node.id,
+          message: `${node.data.label} references a tool that is not registered.`,
+        })
+      }
+      if (node.type === "agent_execution" && node.data.agentId) {
+        const agent = refs.agents.find((item) => item.id === node.data.agentId)
+        if (!agent) {
+          issues.push({ code: "required", nodeId: node.id, message: `${node.data.label} references an agent that is not in the catalog.` })
+        } else if (!node.data.agentVersion || !agent.versions.includes(node.data.agentVersion)) {
+          issues.push({
+            code: "required",
+            nodeId: node.id,
+            message: `${node.data.label} uses an unpublished agent version. Publish the agent before publishing this workflow.`,
+          })
+        }
+      }
     }
   }
 

@@ -5,7 +5,7 @@ import { JSONSchemaEditor, KnowledgeBaseSelector } from "@/components/ai/studio"
 import { CostIndicator, TokenUsageBadge } from "@/components/ai/model-controls"
 import { Button } from "@/components/ui/button"
 import { isApiError } from "@/features/auth/api/errors"
-import { useAgentStudio, useAgentTools, usePublishAgentStudio, useRollbackAgentStudio, useSaveAgentStudio, useTestAgentStudio } from "@/features/agents/hooks"
+import { useAgentStudio, useAgentTestRuns, useAgentTools, usePublishAgentStudio, useRollbackAgentStudio, useSaveAgentStudio, useTestAgentStudio } from "@/features/agents/hooks"
 import { agentModel, modelsForProvider } from "@/features/agents/studio-catalog"
 import type { AgentConfiguration, AgentKnowledgeBinding, AgentModelProvider, AgentTestResponse, AgentToolCallingMode } from "@/features/agents/studio-types"
 import { assessAgentConfiguration, compareConfigurations } from "@/features/agents/studio-validate"
@@ -543,12 +543,14 @@ function VersionFields({
 
 function TestConsole({ agentId, published }: { agentId: string; published: string[] }) {
   const test = useTestAgentStudio(agentId)
+  const history = useAgentTestRuns(agentId)
   const [input, setInput] = useState("Summarize the handbook")
   const [version, setVersion] = useState("draft")
   const [result, setResult] = useState<AgentTestResponse | null>(null)
   const [visible, setVisible] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const stoppedRef = useRef(false)
+  const abortRef = useRef<AbortController | null>(null)
   return (
     <div className="grid gap-3">
       <h2 className="text-base font-medium">Test console</h2>
@@ -573,13 +575,19 @@ function TestConsole({ agentId, published }: { agentId: string; published: strin
           type="button"
           disabled={test.isPending}
           onClick={() => {
+            abortRef.current?.abort()
+            const controller = new AbortController()
+            abortRef.current = controller
             stoppedRef.current = false
             setError(null)
-            void test.mutateAsync({ version, input }).then((response) => {
-              if (stoppedRef.current) return
+            void test.mutateAsync({ version, input, signal: controller.signal }).then((response) => {
+              if (stoppedRef.current || controller.signal.aborted) return
               setResult(response)
               setVisible(1)
-            }).catch((reason: unknown) => setError(isApiError(reason) ? reason.message : "The agent service could not be reached."))
+            }).catch((reason: unknown) => {
+              if (stoppedRef.current || controller.signal.aborted || (isApiError(reason) && reason.code === "cancelled")) return
+              setError(isApiError(reason) ? reason.message : "The agent service could not be reached.")
+            })
           }}
         >
           {test.isPending ? "Running simulation" : "Run simulation"}
@@ -589,6 +597,7 @@ function TestConsole({ agentId, published }: { agentId: string; published: strin
           variant="outline"
           onClick={() => {
             stoppedRef.current = true
+            abortRef.current?.abort()
             setResult(null)
             setError("Simulation stopped. No further steps were applied.")
           }}
@@ -600,6 +609,17 @@ function TestConsole({ agentId, published }: { agentId: string; published: strin
         </Button>
       </div>
       {error ? <p role="alert">{error}</p> : null}
+      <section aria-label="Test history">
+        <h3 className="text-sm font-medium">Test history</h3>
+        {(history.data?.runs.length ?? 0) === 0 ? <p className="text-sm text-muted-foreground">No simulated test runs yet.</p> : null}
+        <ul className="grid gap-1">
+          {(history.data?.runs ?? []).slice(0, 5).map((run) => (
+            <li key={run.runId} className="text-xs text-muted-foreground">
+              {run.runId} · {run.agentVersion || "unknown"} · {run.status} · {run.traceId} · {run.durationMs} ms
+            </li>
+          ))}
+        </ul>
+      </section>
       {result ? (
         <div className="grid gap-2" aria-live="polite">
           <p role="status">{result.notice} Status {result.status}. Latency {result.latencyMs} ms.</p>

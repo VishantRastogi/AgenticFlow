@@ -9,6 +9,7 @@ export type HttpRequest = {
   method: HttpMethod
   body?: unknown
   token?: string | null
+  signal?: AbortSignal
 }
 
 export interface AuthTransport {
@@ -30,6 +31,7 @@ const errorCodes = new Set<ApiErrorCode>([
   "invalid_job_transition",
   "processing_failed",
   "rate_limited",
+  "cancelled",
   "network",
   "api_unavailable",
   "unknown",
@@ -84,10 +86,15 @@ export function createFetchTransport(
       const mode = getApiMode()
       let response: Response
 
+      if (request.signal?.aborted) {
+        throw new ApiError("The request was cancelled.", "cancelled", 0)
+      }
+
       try {
         response = await fetch(`${baseUrl}${request.path}`, {
           method: request.method,
           cache: "no-store",
+          signal: request.signal,
           headers: {
             accept: "application/json",
             ...(request.body === undefined ? {} : { "content-type": "application/json" }),
@@ -95,7 +102,10 @@ export function createFetchTransport(
           },
           body: request.body === undefined ? undefined : JSON.stringify(request.body),
         })
-      } catch {
+      } catch (error) {
+        if (request.signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+          throw new ApiError("The request was cancelled.", "cancelled", 0)
+        }
         throw new ApiError(
           mode === "real" ? unavailableMessage : networkMessage,
           mode === "real" ? "api_unavailable" : "network",

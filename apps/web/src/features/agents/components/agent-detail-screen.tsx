@@ -260,7 +260,7 @@ function ExecutionList({ executions }: { executions: { id: string; status: keyof
           </Link>
           <StatusBadge tone={executionTone[execution.status]}>{label(execution.status)}</StatusBadge>
           <span className="text-xs text-muted-foreground">
-            {formatTimestamp(execution.startedAt)} · version {execution.agentVersion ?? "Not recorded"}
+            {formatTimestamp(execution.startedAt)} · version {execution.agentVersion ?? "unknown"}
           </span>
           <span className="font-mono text-xs text-muted-foreground">{formatDuration(execution.durationMs)}</span>
         </li>

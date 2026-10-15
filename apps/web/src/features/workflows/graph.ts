@@ -1,6 +1,8 @@
+import { branchHandles, branchPrompt, inputType, isLegacyNode, outputType, portsCompatible } from "@/features/workflows/ports"
 import type { WorkflowEdge, WorkflowGraph, WorkflowNode, WorkflowNodeData, WorkflowNodeKind } from "@/features/workflows/types"
+import { workflowNodeKinds } from "@/features/workflows/types"
 
-const kinds = new Set<WorkflowNodeKind>(["trigger", "browser", "api", "model", "condition", "delay", "approval", "output"])
+const kinds = new Set<WorkflowNodeKind>(workflowNodeKinds)
 
 export function defaultNodeData(kind: WorkflowNodeKind): WorkflowNodeData {
   switch (kind) {
@@ -20,6 +22,48 @@ export function defaultNodeData(kind: WorkflowNodeKind): WorkflowNodeData {
       return { label: "Human approval", assignee: "owner", prompt: "Approve this step before it continues." }
     case "output":
       return { label: "Output" }
+    case "llm":
+      return {
+        label: "LLM generation",
+        provider: "agentflow-simulated",
+        model: "orbit-small",
+        promptTemplate: "Summarize the incoming text.",
+        temperature: 0.2,
+        maxOutputTokens: 400,
+        outputSchema: "",
+        timeoutMs: 30000,
+        budgetUsd: 1,
+      }
+    case "rag":
+      return {
+        label: "RAG retrieval",
+        knowledgeBaseId: "",
+        strategy: "hybrid",
+        topK: 4,
+        scoreThreshold: 0.2,
+        rerank: false,
+        contextTokenBudget: 800,
+      }
+    case "ingestion":
+      return { label: "Document ingestion", knowledgeBaseId: "", documentRef: "", processingPolicy: "parse_and_index" }
+    case "embedding":
+      return { label: "Embedding generation", embeddingModel: "orbit-embed-small", textInput: "{{input}}", batchSize: 8 }
+    case "tool":
+      return {
+        label: "Tool invocation",
+        toolId: "calculator",
+        inputMapping: "{{input}}",
+        timeoutMs: 5000,
+        retryPolicy: "none",
+        retries: 0,
+        requiresApproval: false,
+      }
+    case "agent_execution":
+      return { label: "Agent execution", agentId: "", agentVersion: "", inputMapping: "{{input}}", executionLimit: 4 }
+    case "human_approval":
+      return { label: "Approval gate", approverRole: "owner", approvalMessage: "Approve this workflow step.", timeoutMs: 30000 }
+    case "structured_output":
+      return { label: "Validate output", outputSchema: "{\"type\":\"object\"}", failurePolicy: "branch" }
   }
 }
 
@@ -128,13 +172,22 @@ export function connectionError(graph: WorkflowGraph, connection: GraphConnectio
   const edges = graph.edges.filter((edge) => edge.id !== ignoreEdgeId)
   const handle = connection.sourceHandle ?? null
 
-  if (source.type === "condition") {
-    if (handle !== "true" && handle !== "false") return "Choose the true or false path."
+  const branches = branchHandles(source.type)
+  if (branches) {
+    if (!branches.includes(handle ?? "")) return branchPrompt(source.type)
     if (edges.some((edge) => edge.source === source.id && (edge.sourceHandle ?? null) === handle)) {
       return "That path is already connected."
     }
   } else if (edges.some((edge) => edge.source === source.id)) {
     return "This node already has a connection."
+  }
+
+  if (!(isLegacyNode(source.type) && isLegacyNode(target.type))) {
+    const produced = outputType(source.type)
+    const accepted = inputType(target.type)
+    if (!portsCompatible(produced, accepted)) {
+      return `${source.data.label} outputs ${produced}, which ${target.data.label} cannot accept.`
+    }
   }
 
   if (edges.some((edge) => edge.source === source.id && edge.target === target.id && (edge.sourceHandle ?? null) === handle)) {

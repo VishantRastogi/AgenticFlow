@@ -167,7 +167,7 @@ Runs created by `agents.trigger` record `agentVersion` from the agent profile at
 
 ## Workflows
 
-Graph nodes are `trigger`, `browser`, `api`, `model`, `condition`, `delay`, `approval`, `output`. A graph is `{ "nodes": WorkflowNode[], "edges": WorkflowEdge[] }`.
+Graph nodes are `trigger`, `browser`, `api`, `model`, `condition`, `delay`, `approval`, `output`, plus the studio nodes `llm`, `rag`, `ingestion`, `embedding`, `tool`, `agent_execution`, `human_approval`, and `structured_output`. A graph is `{ "nodes": WorkflowNode[], "edges": WorkflowEdge[] }`. Immutable snapshots, validation, and simulated executions are documented in `docs/api-contracts/workflow-service-integration.md`.
 
 ### `workflows.list` `GET /api/workflows`
 
@@ -332,7 +332,8 @@ Body: `{ "name": string, "secret": string }` with secret length at least 8. Resp
 | `agentflow-mock-playground` | Playground conversations and presets |
 | `agentflow-mock-knowledge` | Knowledge bases, documents, ingestion jobs, and chunks |
 | `agentflow-mock-rag` | Last RAG Studio configuration per workspace |
-| `agentflow-mock-agent-studio` | Per-workspace agent drafts and published configuration snapshots |
+| `agentflow-mock-agent-studio` | Per-workspace agent drafts, published snapshots, and simulated test runs |
+| `agentflow-mock-workflow-studio` | Per-workspace workflow snapshots and simulated executions |
 
 ## Playground
 
