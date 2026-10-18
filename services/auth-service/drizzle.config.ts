@@ -1,14 +1,13 @@
-import { defineConfig } from "drizzle-kit";
+/// <reference types="node" />
 
-const databaseUrl = (globalThis as typeof globalThis & {
-	process: { env: Record<string, string | undefined> };
-}).process.env.DATABASE_URL;
+import "dotenv/config";
+import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
 	dialect: "postgresql",
 	schema: "./src/db/schema.ts",
 	out: "./drizzle",
 	dbCredentials: {
-		url: databaseUrl!,
+		url: process.env.DATABASE_URL!,
 	},
 });
